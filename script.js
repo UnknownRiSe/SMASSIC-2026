@@ -1,12 +1,12 @@
 // ============================================================
-// CBT SMASSIC 2026 - STUDENT CLIENT (FIXED)
-// Fix: Kecurangan INSERT + Submit JSON array error
+// CBT SMASSIC 2026 - STUDENT CLIENT (FIXED v2)
+// Fix: Hapus .select() dari insert HASIL untuk mengatasi
+//      "expected JSON array" error
 // ============================================================
 
 // ============ SUPABASE CONFIG ============
 const SUPABASE_URL = 'https://wwchdqtqakpbjswkavnm.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_rwPcbkV7Y6Fi1AKCET40Yg_ae7HGaZr';
-
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ============ STATE VARIABLES ============
@@ -28,7 +28,6 @@ let lastVT = 0;
 let timerSaveCounter = 0;
 let examActive = false;
 let acListenersAttached = false;
-
 const DEFAULT_DURASI = 90;
 
 // ============ UTILITY FUNCTIONS ============
@@ -167,7 +166,6 @@ async function doLogin() {
     }
 
     const status = (data.Status || '').toUpperCase();
-
     if (status === 'KICKED') {
       err.textContent = 'Anda dikeluarkan dari ujian. Hubungi pengawas.';
       err.classList.add('show'); return;
@@ -268,7 +266,7 @@ async function loadMapel() {
     mapelArr.forEach(m => {
       const d = document.createElement('div');
       d.className = 'mapel-item';
-      d.innerHTML = '<span>📘 ' + m + '</span><span>→</span>';
+      d.innerHTML = '<span>📚 ' + m + '</span><span>→</span>';
       d.onclick = () => startExam(m);
       list.appendChild(d);
     });
@@ -295,6 +293,7 @@ async function startExam(mapel) {
       const k = Math.floor(Math.random() * (j + 1));
       [shuffled[j], shuffled[k]] = [shuffled[k], shuffled[j]];
     }
+
     initExam(mapel, shuffled, DEFAULT_DURASI);
   } catch (e) { hideL(); toast('Gagal memuat soal: ' + e.message, 'error'); }
 }
@@ -304,6 +303,7 @@ function initExam(mapel, soal, durasi) {
   examSubmitted = false;
   isBlocked = false;
   clientBlocked = false;
+
   if (violations >= 3) { showBlocked(); return; }
 
   const saved = loadJawabanLocal();
@@ -430,7 +430,7 @@ function updGrid() {
   document.getElementById('stFlag').textContent = fl;
   const vb = document.getElementById('vBadge');
   if (violations > 0) { vb.className = 'vb warn'; vb.textContent = '⚠️ ' + violations + '/3'; }
-  else { vb.className = 'vb clean'; vb.textContent = '✅ Bersih'; }
+  else { vb.className = 'vb clean'; vb.textContent = '🟢 Bersih'; }
 }
 
 // ============ RENDER QUESTION ============
@@ -449,8 +449,8 @@ function renderQ() {
   if (s.Gambar && s.Gambar.trim() !== '') {
     gambarHTML = `<div class="qimg">
       <img src="${s.Gambar}" alt="Gambar Soal"
-           onclick="zoomImg('${s.Gambar}')"
-           onerror="this.parentElement.innerHTML='<div style=\\'color:var(--d);padding:12px\\'>⚠️ Gambar gagal dimuat</div>'">
+        onclick="zoomImg('${s.Gambar}')"
+        onerror="this.parentElement.innerHTML='<div style=\\'color:var(--d);padding:12px\\'> Gambar gagal dimuat</div>'">
       <div class="hint">Klik gambar untuk memperbesar</div>
     </div>`;
   }
@@ -524,7 +524,7 @@ function showSubmitModal() {
   document.getElementById('submitModal').classList.add('active');
 }
 
-// ⭐ FIX BUG 2: Tambah headers count=null dan tangani error lebih baik
+// ✅ FIXED: Hapus .select() dari insert untuk mengatasi "expected JSON array"
 async function doSubmit(auto) {
   if (examSubmitted) return;
   examSubmitted = true;
@@ -557,21 +557,12 @@ async function doSubmit(auto) {
 
     console.log('[SUBMIT] Inserting:', JSON.stringify(insertData));
 
-    // ⭐ FIX: Gunakan array wrapper + count option
-    const { data, error, status, statusText } = await sb
+    // ✅ FIX: Tanpa .select() — langsung insert saja
+    const { error } = await sb
       .from('HASIL')
-      .insert([insertData])
+      .insert([insertData]);
 
-    console.log('[SUBMIT] Response:', { status, statusText, data, error });
-
-    if (error) {
-      // ⭐ FIX: Jika error "JSON array" tapi status 201, artinya data sudah masuk
-      if (status === 201 || status === 200) {
-        console.log('[SUBMIT] Data inserted despite error message, continuing...');
-      } else {
-        throw error;
-      }
-    }
+    if (error) throw error;
 
     // Update status ke SELESAI
     await sb
@@ -589,48 +580,9 @@ async function doSubmit(auto) {
   } catch (e) {
     console.error('[SUBMIT] Error:', e);
     hideL();
-
-    // ⭐ FIX: Fallback - coba insert tanpa .select() (minimal return)
-    try {
-      console.log('[SUBMIT] Retrying with minimal return...');
-
-      const jawabanRinci = {};
-      Object.keys(jawaban).forEach(noSoal => {
-        jawabanRinci[noSoal.toString()] = jawaban[noSoal];
-      });
-
-      const { error: retryError } = await sb
-        .from('HASIL')
-        .insert([{
-          NIS: currentSiswa.NIS,
-          Nama: currentSiswa.Nama,
-          Sekolah: currentSiswa.Sekolah || '',
-          Mapel: currentMapel,
-          Jawaban_rinci: jawabanRinci,
-          Waktu_mulai: waktuMulai,
-          Waktu_selesai: new Date().toISOString(),
-          Skor: 0,
-          Jawaban_benar: 0,
-          Jawaban_salah: 0
-        }], { count: 'exact' });
-
-      if (!retryError) {
-        await sb.from('SISWA').update({ Status: 'SELESAI' }).eq('NIS', currentSiswa.NIS);
-        clearJawabanLocal();
-        clearViolationsLocal();
-        localStorage.removeItem('cbt_siswa');
-        showPage('resultPage');
-        try { document.exitFullscreen(); } catch (ex) { }
-        return;
-      }
-
-      throw retryError;
-    } catch (retryErr) {
-      console.error('[SUBMIT] Retry also failed:', retryErr);
-      toast('Gagal submit: ' + (retryErr.message || 'Unknown error'), 'error');
-      examSubmitted = false;
-      examActive = true;
-    }
+    toast('Gagal submit: ' + (e.message || 'Unknown error'), 'error');
+    examSubmitted = false;
+    examActive = true;
   }
 }
 
@@ -679,7 +631,7 @@ function activateAC() {
   document.addEventListener('selectstart', function (e) { if (examActive) e.preventDefault(); });
 }
 
-// ⭐ FIX BUG 1: Insert kecurangan dengan array wrapper + error handling
+// ✅ Insert kecurangan tanpa .select()
 async function reportCheat(jenis, detail) {
   if (!examActive || examSubmitted || isBlocked || clientBlocked || !currentSiswa) return;
 
@@ -689,7 +641,6 @@ async function reportCheat(jenis, detail) {
 
   violations++;
 
-  // ⭐ FIX: Insert ke KECURANGAN - wrap dalam array, jangan pakai .select()
   try {
     const { error } = await sb
       .from('KECURANGAN')
@@ -752,4 +703,3 @@ window.addEventListener('beforeunload', function (e) {
 
 // ============ INIT ============
 showPage('loginPage');
-
