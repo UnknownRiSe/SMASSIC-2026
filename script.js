@@ -561,7 +561,6 @@ async function doSubmit(auto) {
     const { data, error, status, statusText } = await sb
       .from('HASIL')
       .insert([insertData])
-      .select();
 
     console.log('[SUBMIT] Response:', { status, statusText, data, error });
 
@@ -753,3 +752,4 @@ window.addEventListener('beforeunload', function (e) {
 
 // ============ INIT ============
 showPage('loginPage');
+
