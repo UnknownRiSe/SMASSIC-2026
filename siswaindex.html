@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+  <title>CBT SMASSIC 2026</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+  <!-- LOADING OVERLAY -->
+  <div class="lov" id="loadOv">
+    <div class="spin"></div>
+    <div style="font-size:14px;color:var(--g600);margin-top:16px">Memproses...</div>
+  </div>
+
+  <!-- CHEAT WARNING OVERLAY -->
+  <div id="cheatOverlay">
+    <div class="ci">⚠️</div>
+    <h2>Pelanggaran Terdeteksi!</h2>
+    <p id="cheatMsg"></p>
+    <div class="vc" id="cheatCount">Pelanggaran ke-1</div>
+    <button onclick="dismissCheat()">Kembali ke Ujian</button>
+  </div>
+
+  <!-- BLOCKED OVERLAY -->
+  <div id="blockedOverlay">
+    <div class="bi">🚫</div>
+    <h2 style="font-size:32px;margin-bottom:16px">AKUN DIBLOKIR</h2>
+    <p style="font-size:18px;opacity:.9;max-width:550px;line-height:1.7">
+      Anda telah melakukan <strong>3 kali pelanggaran</strong>. Akun ujian diblokir otomatis.
+    </p>
+    <div style="margin-top:24px;padding:16px 32px;background:rgba(255,255,255,.15);border-radius:var(--r);font-size:15px;border:2px solid rgba(255,255,255,.3)">
+      ⚠️ Hubungi pengawas ujian untuk mengaktifkan kembali akun Anda.
+    </div>
+    <button onclick="recheckBlock()" style="margin-top:24px;padding:14px 40px;background:#fff;color:#b71c1c;border:none;border-radius:50px;font-size:16px;font-weight:600;cursor:pointer" id="recheckBlockBtn">
+      🔄 Cek Ulang Status
+    </button>
+    <p id="recheckInfo" style="margin-top:12px;font-size:13px;opacity:.7"></p>
+  </div>
+
+  <!-- KICKED OVERLAY -->
+  <div id="kickedOverlay">
+    <div style="font-size:80px;margin-bottom:24px">🚪</div>
+    <h2 style="font-size:28px;margin-bottom:12px">Anda Dikeluarkan dari Ujian</h2>
+    <p style="font-size:16px;opacity:.8">Pengawas telah mengeluarkan Anda. Hubungi pengawas.</p>
+    <button onclick="recheckKick()" style="margin-top:24px;padding:14px 40px;background:#fff;color:var(--g900);border:none;border-radius:50px;font-size:16px;font-weight:600;cursor:pointer" id="recheckKickBtn">
+      🔄 Cek Ulang Status
+    </button>
+    <p id="recheckKickInfo" style="margin-top:12px;font-size:13px;color:rgba(255,255,255,.7)"></p>
+  </div>
+
+  <!-- IMAGE ZOOM -->
+  <div id="imgZoom" onclick="this.classList.remove('active')">
+    <img id="zoomImg" src="">
+    <div class="close" onclick="document.getElementById('imgZoom').classList.remove('active')">✕</div>
+  </div>
+
+  <!-- TOAST CONTAINER -->
+  <div class="toast-c" id="toastC"></div>
+
+  <!-- ==================== LOGIN PAGE ==================== -->
+  <div id="loginPage">
+    <div class="login-c">
+      <div class="logo">📝</div>
+      <h1>CBT SMASSIC 2026</h1>
+      <div class="sub">Computer Based Test</div>
+      <div class="badge">SMAN 1 BATU</div>
+      <div class="lerr" id="loginErr"></div>
+      <div class="fg">
+        <label>NIS</label>
+        <input type="text" id="inNIS" placeholder="Masukkan NIS" autocomplete="off">
+      </div>
+      <div class="fg">
+        <label>Password</label>
+        <input type="password" id="inPass" placeholder="Masukkan password" autocomplete="off">
+      </div>
+      <button class="btn btn-p" id="btnLogin" onclick="doLogin()">🔐 Masuk Ujian</button>
+    </div>
+  </div>
+
+  <!-- ==================== MAPEL PAGE ==================== -->
+  <div id="mapelPage">
+    <div class="mapel-c">
+      <div style="font-size:48px;margin-bottom:8px">📚</div>
+      <h2 style="font-size:22px;margin-bottom:4px" id="welcomeNm">Selamat Datang</h2>
+      <p style="font-size:14px;color:var(--g600)">Pilih mata pelajaran</p>
+      <div class="mapel-list" id="mapelList"></div>
+    </div>
+  </div>
+
+  <!-- ==================== EXAM PAGE ==================== -->
+  <div id="examPage">
+    <div class="topbar">
+      <div class="tl">
+        <button class="mob-toggle" onclick="document.getElementById('qSb').classList.toggle('mob')">☰</button>
+        <span class="ai">📝</span>
+        <span class="an">CBT SMASSIC 2026</span>
+        <span class="am" id="examMapel">-</span>
+      </div>
+      <div style="display:flex;align-items:center">
+        <div class="timer" id="timerBox">
+          <span>⏱</span>
+          <span id="timerDisp">00:00:00</span>
+        </div>
+      </div>
+      <div class="tr">
+        <div class="vb clean" id="vBadge">✅ Bersih</div>
+        <div class="si">
+          <div class="nm" id="examNm">-</div>
+          <div class="ns" id="examNIS">-</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="exam-body">
+      <div class="qsb" id="qSb">
+        <div class="st">Navigasi Soal</div>
+        <div class="qgrid" id="qGrid"></div>
+        <div class="sstats">
+          <div class="sr"><span class="sl">Dijawab</span><span class="sv green" id="stAns">0</span></div>
+          <div class="sr"><span class="sl">Belum</span><span class="sv red" id="stUnans">0</span></div>
+          <div class="sr"><span class="sl">Ditandai</span><span class="sv" style="color:var(--w)" id="stFlag">0</span></div>
+        </div>
+        <button class="bss" onclick="showSubmitModal()">📤 Kumpulkan Jawaban</button>
+      </div>
+      <div class="qcontent" id="qContent"></div>
+    </div>
+  </div>
+
+  <!-- ==================== RESULT PAGE ==================== -->
+  <div id="resultPage">
+    <div class="result-c">
+      <div class="ri">🎉</div>
+      <h2>Jawaban Berhasil Dikumpulkan</h2>
+      <p>Terima kasih telah mengerjakan ujian.<br>Jawaban Anda telah tersimpan dengan aman.<br>Hasil akan diumumkan oleh pengawas.</p>
+      <div class="done-badge">✅ Selesai</div>
+      <p style="margin-top:20px;font-size:13px;color:var(--g500)">Anda dapat menutup halaman ini.</p>
+    </div>
+  </div>
+
+  <!-- ==================== SUBMIT MODAL ==================== -->
+  <div class="modal-bg" id="submitModal">
+    <div class="modal">
+      <div style="font-size:48px;margin-bottom:12px">📤</div>
+      <h3>Kumpulkan Jawaban?</h3>
+      <p id="submitInfo"></p>
+      <div class="modal-a">
+        <button class="btn btn-sec" onclick="document.getElementById('submitModal').classList.remove('active')">Batal</button>
+        <button class="btn btn-p" onclick="doSubmit()">Ya, Kumpulkan</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
