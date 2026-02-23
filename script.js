@@ -1,8 +1,3 @@
-// ============================================================
-// CBT SMASSIC 2026 - STUDENT CLIENT
-// Migrated from Google Apps Script to Supabase
-// ============================================================
-
 // ============ SUPABASE CONFIG ============
 // ⚠️ GANTI DENGAN KREDENSIAL SUPABASE ANDA
 const SUPABASE_URL = 'https://wwchdqtqakpbjswkavnm.supabase.co';
@@ -984,3 +979,4 @@ window.addEventListener('beforeunload', function (e) {
 
 // ============ INIT ============
 showPage('loginPage');
+
