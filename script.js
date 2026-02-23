@@ -1,9 +1,15 @@
+// ============================================================
+// CBT SMASSIC 2026 - STUDENT CLIENT
+// Migrated from Google Apps Script to Supabase
+// ============================================================
+
 // ============ SUPABASE CONFIG ============
 // ⚠️ GANTI DENGAN KREDENSIAL SUPABASE ANDA
 const SUPABASE_URL = 'https://wwchdqtqakpbjswkavnm.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_rwPcbkV7Y6Fi1AKCET40Yg_ae7HGaZr';
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// ✅ FIX: Gunakan nama "sb" agar tidak bentrok dengan global "supabase" dari CDN
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ============ STATE VARIABLES ============
 let currentSiswa = null;
@@ -25,7 +31,6 @@ let timerSaveCounter = 0;
 let examActive = false;
 let acListenersAttached = false;
 
-// Default exam duration in minutes (can be overridden)
 const DEFAULT_DURASI = 90;
 
 // ============ UTILITY FUNCTIONS ============
@@ -72,7 +77,7 @@ function saveJawabanLocal() {
       waktuMulai: waktuMulai,
       time: Date.now()
     }));
-  } catch (e) { /* ignore */ }
+  } catch (e) { }
 }
 
 function loadJawabanLocal() {
@@ -81,7 +86,6 @@ function loadJawabanLocal() {
     const s = localStorage.getItem('jawaban_' + currentSiswa.NIS + '_' + currentMapel);
     if (!s) return null;
     const d = JSON.parse(s);
-    // Expire after 3 hours
     if (Date.now() - d.time > 10800000) return null;
     return d;
   } catch (e) { return null; }
@@ -91,14 +95,14 @@ function clearJawabanLocal() {
   if (!currentSiswa || !currentMapel) return;
   try {
     localStorage.removeItem('jawaban_' + currentSiswa.NIS + '_' + currentMapel);
-  } catch (e) { /* ignore */ }
+  } catch (e) { }
 }
 
 function saveViolationsLocal() {
   if (!currentSiswa) return;
   try {
     localStorage.setItem('v_count_' + currentSiswa.NIS, violations.toString());
-  } catch (e) { /* ignore */ }
+  } catch (e) { }
 }
 
 function loadViolationsLocal() {
@@ -106,14 +110,14 @@ function loadViolationsLocal() {
   try {
     const c = localStorage.getItem('v_count_' + currentSiswa.NIS);
     if (c) violations = parseInt(c);
-  } catch (e) { /* ignore */ }
+  } catch (e) { }
 }
 
 function clearViolationsLocal() {
   if (!currentSiswa) return;
   try {
     localStorage.removeItem('v_count_' + currentSiswa.NIS);
-  } catch (e) { /* ignore */ }
+  } catch (e) { }
 }
 
 // ============ FULL RESET STATE ============
@@ -136,7 +140,7 @@ function fullResetState() {
   try {
     if (document.fullscreenElement) document.exitFullscreen();
     else if (document.webkitFullscreenElement) document.webkitExitFullscreen();
-  } catch (e) { /* ignore */ }
+  } catch (e) { }
 
   if (currentSiswa) {
     clearViolationsLocal();
@@ -163,8 +167,8 @@ async function doLogin() {
   showL();
 
   try {
-    // Query SISWA table
-    const { data, error } = await supabase
+    // ✅ FIX: Semua "supabase." diganti "sb."
+    const { data, error } = await sb
       .from('SISWA')
       .select('NIS, Password, Nama, Sekolah, Status')
       .eq('NIS', nis)
@@ -199,7 +203,7 @@ async function doLogin() {
     }
 
     // Update status to ONLINE
-    await supabase
+    await sb
       .from('SISWA')
       .update({
         Status: 'ONLINE',
@@ -213,7 +217,6 @@ async function doLogin() {
       Sekolah: data.Sekolah || ''
     };
 
-    // Save to localStorage for session persistence
     localStorage.setItem('cbt_siswa', JSON.stringify(currentSiswa));
 
     violations = 0;
@@ -235,7 +238,6 @@ async function doLogin() {
   }
 }
 
-// Enter key handlers
 document.getElementById('inPass').onkeydown = function (e) {
   if (e.key === 'Enter') doLogin();
 };
@@ -253,7 +255,7 @@ async function recheckBlock() {
   document.getElementById('recheckInfo').textContent = '';
 
   try {
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('SISWA')
       .select('Status')
       .eq('NIS', currentSiswa.NIS)
@@ -296,7 +298,7 @@ async function recheckKick() {
   document.getElementById('recheckKickInfo').textContent = '';
 
   try {
-    const { data } = await supabase
+    const { data } = await sb
       .from('SISWA')
       .select('Status')
       .eq('NIS', currentSiswa.NIS)
@@ -333,8 +335,7 @@ async function recheckKick() {
 async function loadMapel() {
   showL();
   try {
-    // Get distinct Mapel from SOAL table
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('SOAL')
       .select('Mapel');
 
@@ -345,7 +346,6 @@ async function loadMapel() {
       return;
     }
 
-    // Extract unique mapel
     const mapelSet = new Set();
     data.forEach(row => {
       if (row.Mapel) mapelSet.add(row.Mapel);
@@ -384,8 +384,7 @@ async function startExam(mapel) {
   showL();
 
   try {
-    // Fetch soal - TANPA kolom Kunci (keamanan)
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('SOAL')
       .select('No, Soal, Opsi_A, Opsi_B, Opsi_C, Opsi_D, Opsi_E, Gambar, Mapel')
       .eq('Mapel', mapel)
@@ -398,7 +397,6 @@ async function startExam(mapel) {
       return;
     }
 
-    // Shuffle soal
     const shuffled = [...data];
     for (let j = shuffled.length - 1; j > 0; j--) {
       const k = Math.floor(Math.random() * (j + 1));
@@ -421,7 +419,6 @@ function initExam(mapel, soal, durasi) {
 
   if (violations >= 3) { showBlocked(); return; }
 
-  // Try restore saved answers
   const saved = loadJawabanLocal();
   if (saved) {
     jawaban = saved.jawaban || {};
@@ -447,30 +444,25 @@ function initExam(mapel, soal, durasi) {
 
   showPage('examPage');
 
-  examActive = false; // Not active yet, wait for grace period
+  examActive = false;
 
   buildGrid();
   renderQ();
   startTimer();
   startHB();
 
-  // Attach anti-cheat listeners once
   if (!acListenersAttached) {
     activateAC();
     acListenersAttached = true;
   }
 
-  // Update status to ONLINE
-  supabase
-    .from('SISWA')
+  sb.from('SISWA')
     .update({ Status: 'ONLINE' })
     .eq('NIS', currentSiswa.NIS)
-    .then(() => { /* ok */ });
+    .then(() => { });
 
-  // Request fullscreen
   requestFS();
 
-  // Grace period: 3 seconds before anti-cheat activates
   setTimeout(() => {
     if (!examSubmitted && !isBlocked && !clientBlocked) {
       examActive = true;
@@ -488,7 +480,7 @@ function requestFS() {
   try {
     if (el.requestFullscreen) el.requestFullscreen();
     else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-  } catch (e) { /* ignore */ }
+  } catch (e) { }
 }
 
 // ============ TIMER ============
@@ -533,14 +525,12 @@ function startHB() {
     if (!currentSiswa) return;
 
     try {
-      // Update heartbeat
-      await supabase
+      await sb
         .from('SISWA')
         .update({ Last_Heartbeat: new Date().toISOString() })
         .eq('NIS', currentSiswa.NIS);
 
-      // Check if kicked or blocked
-      const { data } = await supabase
+      const { data } = await sb
         .from('SISWA')
         .select('Status')
         .eq('NIS', currentSiswa.NIS)
@@ -561,10 +551,8 @@ function startHB() {
           return;
         }
       }
-    } catch (e) {
-      // Network error, silently ignore
-    }
-  }, 30000); // Every 30 seconds
+    } catch (e) { }
+  }, 30000);
 }
 
 function showBlocked() {
@@ -641,8 +629,8 @@ function renderQ() {
   let gambarHTML = '';
   if (s.Gambar && s.Gambar.trim() !== '') {
     gambarHTML = `<div class="qimg">
-      <img src="${s.Gambar}" alt="Gambar Soal" 
-           onclick="zoomImg('${s.Gambar}')" 
+      <img src="${s.Gambar}" alt="Gambar Soal"
+           onclick="zoomImg('${s.Gambar}')"
            onerror="this.parentElement.innerHTML='<div style=\\'color:var(--d);padding:12px\\'>⚠️ Gambar gagal dimuat</div>'">
       <div class="hint">Klik gambar untuk memperbesar</div>
     </div>`;
@@ -743,15 +731,12 @@ async function doSubmit(auto) {
   showL();
 
   try {
-    // Build Jawaban_rinci JSON
-    // Format: {"1": "A", "2": "C", ...} where key = No soal
     const jawabanRinci = {};
     Object.keys(jawaban).forEach(noSoal => {
       jawabanRinci[noSoal.toString()] = jawaban[noSoal];
     });
 
-    // INSERT into HASIL table
-    const { error } = await supabase
+    const { error } = await sb
       .from('HASIL')
       .insert({
         NIS: currentSiswa.NIS,
@@ -768,22 +753,20 @@ async function doSubmit(auto) {
 
     if (error) throw error;
 
-    // Update status to SELESAI
-    await supabase
+    await sb
       .from('SISWA')
       .update({ Status: 'SELESAI' })
       .eq('NIS', currentSiswa.NIS);
 
     hideL();
 
-    // Clean up
     clearJawabanLocal();
     clearViolationsLocal();
     localStorage.removeItem('cbt_siswa');
 
     showPage('resultPage');
 
-    try { document.exitFullscreen(); } catch (e) { /* ignore */ }
+    try { document.exitFullscreen(); } catch (e) { }
 
   } catch (e) {
     hideL();
@@ -795,7 +778,6 @@ async function doSubmit(auto) {
 
 // ============ ANTI CHEAT ============
 function activateAC() {
-  // Copy/Cut/Paste
   document.addEventListener('copy', function (e) {
     if (!examActive) return;
     e.preventDefault();
@@ -812,14 +794,12 @@ function activateAC() {
     reportCheat('Ganti Tab', 'Paste attempt');
   });
 
-  // Right click
   document.addEventListener('contextmenu', function (e) {
     if (!examActive) return;
     e.preventDefault();
     reportCheat('Klik Kanan', 'Right click detected');
   });
 
-  // Keyboard shortcuts
   document.addEventListener('keydown', function (e) {
     if (!examActive) return;
     if (e.ctrlKey && 'cvxauspi'.indexOf(e.key.toLowerCase()) >= 0) {
@@ -849,7 +829,6 @@ function activateAC() {
     }
   });
 
-  // Fullscreen change
   function handleFS() {
     if (!examActive) return;
     if (examSubmitted || isBlocked || clientBlocked) return;
@@ -863,7 +842,6 @@ function activateAC() {
   document.addEventListener('fullscreenchange', handleFS);
   document.addEventListener('webkitfullscreenchange', handleFS);
 
-  // Tab switch / visibility change
   document.addEventListener('visibilitychange', function () {
     if (!examActive) return;
     if (!examSubmitted && !isBlocked && document.hidden) {
@@ -871,7 +849,6 @@ function activateAC() {
     }
   });
 
-  // Window blur
   window.addEventListener('blur', function () {
     if (!examActive) return;
     if (!examSubmitted && !isBlocked) {
@@ -879,7 +856,6 @@ function activateAC() {
     }
   });
 
-  // Mouse leave
   document.addEventListener('mouseleave', function () {
     if (!examActive) return;
     if (!examSubmitted && !isBlocked) {
@@ -887,7 +863,6 @@ function activateAC() {
     }
   });
 
-  // Drag & Select prevention
   document.addEventListener('dragstart', function (e) { e.preventDefault(); });
   document.addEventListener('selectstart', function (e) { if (examActive) e.preventDefault(); });
 }
@@ -899,15 +874,13 @@ async function reportCheat(jenis, detail) {
   if (!currentSiswa) return;
 
   const now = Date.now();
-  // Debounce 5 seconds
   if (now - lastVT < 5000) return;
   lastVT = now;
 
   violations++;
 
-  // Insert into KECURANGAN table
   try {
-    await supabase
+    await sb
       .from('KECURANGAN')
       .insert({
         NIS: currentSiswa.NIS,
@@ -915,11 +888,8 @@ async function reportCheat(jenis, detail) {
         Jenis: jenis,
         Timestamp: new Date().toISOString()
       });
-  } catch (e) {
-    // If insert fails, still handle locally
-  }
+  } catch (e) { }
 
-  // Auto block at 3 violations
   if (violations >= 3) {
     clientBlocked = true;
     examActive = false;
@@ -931,13 +901,12 @@ async function reportCheat(jenis, detail) {
       'Pelanggaran ke-' + violations + ' dari 3 - DIBLOKIR';
     document.getElementById('cheatOverlay').classList.add('active');
 
-    // Update server status to BLOCKED
     try {
-      await supabase
+      await sb
         .from('SISWA')
         .update({ Status: 'BLOCKED' })
         .eq('NIS', currentSiswa.NIS);
-    } catch (e) { /* ignore */ }
+    } catch (e) { }
 
     setTimeout(() => {
       document.getElementById('cheatOverlay').classList.remove('active');
@@ -947,7 +916,6 @@ async function reportCheat(jenis, detail) {
     return;
   }
 
-  // Violations 1-2: show warning
   document.getElementById('cheatMsg').textContent =
     detail + '. Aktivitas ini dicatat dan dilaporkan ke pengawas.';
   document.getElementById('cheatCount').textContent =
@@ -979,4 +947,3 @@ window.addEventListener('beforeunload', function (e) {
 
 // ============ INIT ============
 showPage('loginPage');
-
