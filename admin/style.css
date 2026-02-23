@@ -1,0 +1,386 @@
+/* ============================================================
+   CBT SMASSIC 2026 - ADMIN DASHBOARD STYLES
+   Bootstrap 5 + Custom Overrides
+   ============================================================ */
+
+:root {
+  --sidebar-width: 250px;
+  --topbar-height: 56px;
+  --sidebar-bg: #1e293b;
+  --sidebar-text: #94a3b8;
+  --sidebar-active: #3b82f6;
+  --sidebar-hover: #334155;
+}
+
+/* ============ LOGIN PAGE ============ */
+.login-page {
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #1e293b 100%);
+  min-height: 100vh;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.login-icon {
+  font-size: 56px;
+  line-height: 1;
+}
+
+.ls-1 {
+  letter-spacing: 1.5px;
+}
+
+/* ============ SIDEBAR ============ */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--sidebar-width);
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
+  z-index: 1040;
+  transition: transform 0.3s ease;
+  overflow-y: auto;
+}
+
+.sidebar .nav-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  color: var(--sidebar-text);
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  transition: all 0.2s;
+  margin-bottom: 2px;
+}
+
+.sidebar .nav-link:hover {
+  background: var(--sidebar-hover);
+  color: #e2e8f0;
+}
+
+.sidebar .nav-link.active {
+  background: var(--sidebar-active);
+  color: #fff;
+}
+
+.sidebar .nav-link .badge {
+  font-size: 10px;
+  padding: 3px 7px;
+}
+
+.sidebar .nav-link i {
+  font-size: 16px;
+  width: 20px;
+  text-align: center;
+}
+
+/* ============ MAIN CONTENT ============ */
+.main-content {
+  margin-left: var(--sidebar-width);
+  min-height: 100vh;
+  background: #f1f5f9;
+  transition: margin-left 0.3s ease;
+}
+
+.top-navbar {
+  height: var(--topbar-height);
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+  position: sticky;
+  top: 0;
+  z-index: 1020;
+}
+
+.content-area {
+  min-height: calc(100vh - var(--topbar-height));
+}
+
+/* ============ STAT CARDS ============ */
+.stat-card {
+  border-radius: 12px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,.1) !important;
+}
+
+.stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+/* ============ STATUS BADGES ============ */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  border-radius: 50px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-badge.online {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.status-badge.offline {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.status-badge.selesai {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.status-badge.blocked {
+  background: #1e293b;
+  color: #fff;
+}
+
+.status-badge.kicked {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.status-badge .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-badge.online .dot { background: #22c55e; animation: blink-dot 1.5s infinite; }
+.status-badge.offline .dot { background: #94a3b8; }
+.status-badge.selesai .dot { background: #3b82f6; }
+.status-badge.blocked .dot { background: #fff; }
+.status-badge.kicked .dot { background: #dc2626; }
+
+@keyframes blink-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ============ CHEAT JENIS BADGE ============ */
+.cheat-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 50px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.cheat-badge.tab { background: #fef3c7; color: #92400e; }
+.cheat-badge.focus { background: #fce7f3; color: #9d174d; }
+.cheat-badge.fullscreen { background: #e0e7ff; color: #3730a3; }
+.cheat-badge.keyboard { background: #ede9fe; color: #5b21b6; }
+.cheat-badge.devtools { background: #fef2f2; color: #991b1b; }
+.cheat-badge.mouse { background: #f0fdf4; color: #166534; }
+.cheat-badge.click { background: #fff7ed; color: #9a3412; }
+.cheat-badge.screenshot { background: #fdf2f8; color: #831843; }
+.cheat-badge.default { background: #f1f5f9; color: #475569; }
+
+/* ============ REALTIME INDICATOR ============ */
+.realtime-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ef4444;
+  display: inline-block;
+  transition: background 0.3s;
+}
+
+.realtime-dot.connected {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34,197,94,.3);
+  animation: rt-pulse 2s infinite;
+}
+
+@keyframes rt-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(34,197,94,.3); }
+  50% { box-shadow: 0 0 0 6px rgba(34,197,94,.1); }
+}
+
+/* ============ TABLE STYLES ============ */
+.table th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #64748b;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.table td {
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+.table-row-highlight {
+  animation: row-flash 1.5s ease;
+}
+
+@keyframes row-flash {
+  0% { background: #fef9c3; }
+  100% { background: transparent; }
+}
+
+/* New row insert animation */
+.cheat-row-new {
+  animation: cheat-slide-in 0.5s ease;
+}
+
+@keyframes cheat-slide-in {
+  from {
+    background: #fef2f2;
+    transform: translateX(-20px);
+    opacity: 0;
+  }
+  to {
+    background: transparent;
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* ============ SCROLLBAR ============ */
+.sidebar::-webkit-scrollbar,
+.table-responsive::-webkit-scrollbar {
+  width: 5px;
+}
+.sidebar::-webkit-scrollbar-track,
+.table-responsive::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 10px;
+}
+.table-responsive::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+
+/* ============ HEARTBEAT TEXT ============ */
+.hb-text {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.hb-text.recent {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.hb-text.stale {
+  color: #dc2626;
+}
+
+/* ============ SECTION PANEL ============ */
+.section-panel {
+  animation: fade-in 0.3s ease;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============ SIDEBAR OVERLAY (Mobile) ============ */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.5);
+  z-index: 1035;
+}
+
+.sidebar-overlay.show {
+  display: block;
+}
+
+/* ============ RESPONSIVE ============ */
+@media (max-width: 767.98px) {
+  .sidebar {
+    transform: translateX(-100%);
+  }
+
+  .sidebar.show {
+    transform: translateX(0);
+  }
+
+  .main-content {
+    margin-left: 0;
+  }
+
+  .stat-value {
+    font-size: 22px;
+  }
+
+  .stat-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+  }
+}
+
+/* ============ TOAST CUSTOM ============ */
+.toast-cheat {
+  border-left: 4px solid #dc2626;
+}
+
+/* ============ TRUNCATE ============ */
+.text-truncate-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  max-width: 300px;
+}
+
+/* ============ EMPTY STATE ============ */
+.empty-state {
+  padding: 48px 20px;
+  text-align: center;
+  color: #94a3b8;
+}
+
+.empty-state i {
+  font-size: 48px;
+  margin-bottom: 12px;
+  display: block;
+}
