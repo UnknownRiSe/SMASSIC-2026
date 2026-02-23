@@ -2,8 +2,8 @@
 // CBT SMASSIC 2026 - STUDENT CLIENT (FINAL FIX)
 // ============================================================
 
-const SUPABASE_URL = 'https://YOUR_PROJECT_ID.supabase.co';
-const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY_HERE';
+const SUPABASE_URL = 'https://wwchdqtqakpbjswkavnm.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_rwPcbkV7Y6Fi1AKCET40Yg_ae7HGaZr';
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -550,3 +550,4 @@ window.addEventListener('beforeunload', e => {
 
 // ============ INIT ============
 showPage('loginPage');
+
