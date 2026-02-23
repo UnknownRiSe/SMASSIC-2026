@@ -1,1 +1,501 @@
-<h1>Halaman Admin</h1>
+<!DOCTYPE html>
+<html lang="id" data-bs-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Panel Pengawas - CBT SMASSIC 2026</title>
+
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Supabase JS -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+  <!-- ==================== LOGIN PAGE ==================== -->
+  <div id="loginPage" class="login-page d-flex align-items-center justify-content-center min-vh-100">
+    <div class="login-card card shadow-lg border-0">
+      <div class="card-body p-4 p-md-5">
+        <div class="text-center mb-4">
+          <div class="login-icon mb-3">🛡️</div>
+          <h4 class="fw-bold mb-1">Panel Pengawas</h4>
+          <p class="text-muted small">CBT SMASSIC 2026 — SMAN 1 Batu</p>
+          <span class="badge bg-dark px-3 py-2 text-uppercase ls-1">Proctor Access</span>
+        </div>
+
+        <div id="loginAlert" class="alert alert-danger d-none small py-2" role="alert"></div>
+
+        <form id="loginForm" onsubmit="return handleLogin(event)">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Email</label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+              <input type="email" class="form-control" id="inEmail" placeholder="admin@sekolah.id" required autocomplete="email">
+            </div>
+          </div>
+          <div class="mb-4">
+            <label class="form-label small fw-semibold">Password</label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-lock"></i></span>
+              <input type="password" class="form-control" id="inPassword" placeholder="••••••••" required autocomplete="current-password">
+              <button class="btn btn-outline-secondary" type="button" onclick="togglePassword()">
+                <i class="bi bi-eye" id="eyeIcon"></i>
+              </button>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary w-100 fw-semibold py-2" id="btnLogin">
+            <span class="spinner-border spinner-border-sm d-none me-2" id="loginSpinner"></span>
+            <i class="bi bi-box-arrow-in-right me-1"></i> Masuk Panel
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== DASHBOARD ==================== -->
+  <div id="dashboardPage" class="d-none">
+
+    <!-- Sidebar -->
+    <nav id="sidebar" class="sidebar d-flex flex-column">
+      <div class="sidebar-header p-3 border-bottom">
+        <div class="d-flex align-items-center gap-2">
+          <span class="fs-4">🛡️</span>
+          <div>
+            <div class="fw-bold small">CBT SMASSIC</div>
+            <div class="text-muted" style="font-size:11px">Panel Pengawas</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="nav-items flex-grow-1 p-2">
+        <button class="nav-link active w-100 text-start" data-section="overview" onclick="switchSection('overview')">
+          <i class="bi bi-grid-1x2-fill"></i> Overview
+        </button>
+        <button class="nav-link w-100 text-start" data-section="siswa" onclick="switchSection('siswa')">
+          <i class="bi bi-people-fill"></i> Monitor Siswa
+          <span class="badge bg-success ms-auto" id="navOnlineCount">0</span>
+        </button>
+        <button class="nav-link w-100 text-start" data-section="kecurangan" onclick="switchSection('kecurangan')">
+          <i class="bi bi-exclamation-triangle-fill"></i> Live Kecurangan
+          <span class="badge bg-danger ms-auto" id="navCheatCount">0</span>
+        </button>
+        <button class="nav-link w-100 text-start" data-section="hasil" onclick="switchSection('hasil')">
+          <i class="bi bi-clipboard-data-fill"></i> Rekap Nilai
+        </button>
+        <button class="nav-link w-100 text-start" data-section="soal" onclick="switchSection('soal')">
+          <i class="bi bi-journal-text"></i> Bank Soal
+        </button>
+      </div>
+
+      <div class="p-3 border-top">
+        <div class="small text-muted mb-2" id="adminEmail">admin@sekolah.id</div>
+        <button class="btn btn-outline-secondary btn-sm w-100" onclick="handleLogout()">
+          <i class="bi bi-box-arrow-left"></i> Logout
+        </button>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main id="mainContent" class="main-content">
+      <!-- Top Navbar -->
+      <nav class="top-navbar d-flex align-items-center justify-content-between px-3 px-md-4">
+        <div class="d-flex align-items-center gap-3">
+          <button class="btn btn-light btn-sm d-md-none" onclick="toggleSidebar()">
+            <i class="bi bi-list fs-5"></i>
+          </button>
+          <h5 class="mb-0 fw-bold" id="sectionTitle">📊 Overview</h5>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+          <span class="badge bg-light text-dark border" id="clockBadge">
+            <i class="bi bi-clock"></i> <span id="liveClock">--:--:--</span>
+          </span>
+          <span class="realtime-dot" id="realtimeDot" title="Realtime Connected"></span>
+        </div>
+      </nav>
+
+      <!-- Content Area -->
+      <div class="content-area p-3 p-md-4">
+
+        <!-- ===== OVERVIEW SECTION ===== -->
+        <section id="sec-overview" class="section-panel">
+          <!-- Stats Cards -->
+          <div class="row g-3 mb-4" id="statsRow">
+            <div class="col-6 col-lg-3">
+              <div class="card stat-card border-0 shadow-sm h-100">
+                <div class="card-body">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="stat-icon bg-primary-subtle text-primary"><i class="bi bi-people-fill"></i></div>
+                    <div>
+                      <div class="stat-value" id="statTotal">0</div>
+                      <div class="stat-label">Total Siswa</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 col-lg-3">
+              <div class="card stat-card border-0 shadow-sm h-100">
+                <div class="card-body">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="stat-icon bg-success-subtle text-success"><i class="bi bi-wifi"></i></div>
+                    <div>
+                      <div class="stat-value" id="statOnline">0</div>
+                      <div class="stat-label">Online</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 col-lg-3">
+              <div class="card stat-card border-0 shadow-sm h-100">
+                <div class="card-body">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="stat-icon bg-info-subtle text-info"><i class="bi bi-check-circle-fill"></i></div>
+                    <div>
+                      <div class="stat-value" id="statSelesai">0</div>
+                      <div class="stat-label">Selesai</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 col-lg-3">
+              <div class="card stat-card border-0 shadow-sm h-100">
+                <div class="card-body">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="stat-icon bg-danger-subtle text-danger"><i class="bi bi-shield-exclamation"></i></div>
+                    <div>
+                      <div class="stat-value" id="statBlocked">0</div>
+                      <div class="stat-label">Blocked</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Second Row -->
+          <div class="row g-3 mb-4">
+            <div class="col-6 col-lg-3">
+              <div class="card stat-card border-0 shadow-sm h-100">
+                <div class="card-body">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="stat-icon bg-warning-subtle text-warning"><i class="bi bi-exclamation-triangle-fill"></i></div>
+                    <div>
+                      <div class="stat-value" id="statKecurangan">0</div>
+                      <div class="stat-label">Kecurangan</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 col-lg-3">
+              <div class="card stat-card border-0 shadow-sm h-100">
+                <div class="card-body">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="stat-icon bg-primary-subtle text-primary"><i class="bi bi-journal-text"></i></div>
+                    <div>
+                      <div class="stat-value" id="statSoal">0</div>
+                      <div class="stat-label">Total Soal</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 col-lg-3">
+              <div class="card stat-card border-0 shadow-sm h-100">
+                <div class="card-body">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="stat-icon bg-success-subtle text-success"><i class="bi bi-trophy-fill"></i></div>
+                    <div>
+                      <div class="stat-value" id="statRata">0</div>
+                      <div class="stat-label">Rata-rata Skor</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 col-lg-3">
+              <div class="card stat-card border-0 shadow-sm h-100">
+                <div class="card-body">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="stat-icon bg-info-subtle text-info"><i class="bi bi-clipboard-check-fill"></i></div>
+                    <div>
+                      <div class="stat-value" id="statHasil">0</div>
+                      <div class="stat-label">Sudah Submit</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recent Cheating -->
+          <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white d-flex align-items-center justify-content-between">
+              <h6 class="mb-0 fw-bold"><i class="bi bi-lightning-charge-fill text-warning"></i> Kecurangan Terbaru</h6>
+              <button class="btn btn-sm btn-outline-secondary" onclick="switchSection('kecurangan')">Lihat Semua →</button>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-hover table-sm mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Waktu</th>
+                      <th>NIS</th>
+                      <th>Nama</th>
+                      <th>Jenis</th>
+                    </tr>
+                  </thead>
+                  <tbody id="recentCheatBody">
+                    <tr><td colspan="4" class="text-center text-muted py-4"><i class="bi bi-shield-check fs-3 d-block mb-2"></i>Belum ada kecurangan</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===== SISWA SECTION ===== -->
+        <section id="sec-siswa" class="section-panel d-none">
+          <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white d-flex align-items-center justify-content-between flex-wrap gap-2">
+              <h6 class="mb-0 fw-bold"><i class="bi bi-people-fill text-primary"></i> Monitor Siswa</h6>
+              <div class="d-flex gap-2 flex-wrap">
+                <div class="input-group input-group-sm" style="width:220px">
+                  <span class="input-group-text"><i class="bi bi-search"></i></span>
+                  <input type="text" class="form-control" placeholder="Cari NIS/Nama..." id="searchSiswa" oninput="filterSiswa()">
+                </div>
+                <select class="form-select form-select-sm" style="width:140px" id="filterStatus" onchange="filterSiswa()">
+                  <option value="">Semua Status</option>
+                  <option value="ONLINE">Online</option>
+                  <option value="OFFLINE">Offline</option>
+                  <option value="SELESAI">Selesai</option>
+                  <option value="BLOCKED">Blocked</option>
+                  <option value="KICKED">Kicked</option>
+                </select>
+                <button class="btn btn-sm btn-warning" onclick="resetAllStatus()" title="Reset semua status ke OFFLINE">
+                  <i class="bi bi-arrow-counterclockwise"></i> Reset Semua
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="loadSiswa()">
+                  <i class="bi bi-arrow-clockwise"></i>
+                </button>
+              </div>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-hover table-sm mb-0 align-middle">
+                  <thead class="table-light">
+                    <tr>
+                      <th style="width:50px">#</th>
+                      <th>NIS</th>
+                      <th>Nama</th>
+                      <th>Sekolah</th>
+                      <th>Status</th>
+                      <th>Heartbeat</th>
+                      <th style="width:200px">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody id="siswaBody">
+                    <tr><td colspan="7" class="text-center text-muted py-5">
+                      <div class="spinner-border spinner-border-sm me-2"></div>Memuat data...
+                    </td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="card-footer bg-white small text-muted" id="siswaFooter">
+              Total: 0 siswa
+            </div>
+          </div>
+        </section>
+
+        <!-- ===== KECURANGAN SECTION ===== -->
+        <section id="sec-kecurangan" class="section-panel d-none">
+          <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white d-flex align-items-center justify-content-between flex-wrap gap-2">
+              <h6 class="mb-0 fw-bold"><i class="bi bi-exclamation-triangle-fill text-danger"></i> Live Kecurangan</h6>
+              <div class="d-flex gap-2 flex-wrap">
+                <div class="input-group input-group-sm" style="width:220px">
+                  <span class="input-group-text"><i class="bi bi-search"></i></span>
+                  <input type="text" class="form-control" placeholder="Cari NIS/Nama..." id="searchCheat" oninput="filterKecurangan()">
+                </div>
+                <select class="form-select form-select-sm" style="width:160px" id="filterJenis" onchange="filterKecurangan()">
+                  <option value="">Semua Jenis</option>
+                  <option value="Ganti Tab">Ganti Tab</option>
+                  <option value="Focus Lost">Focus Lost</option>
+                  <option value="Keluar Fullscreen">Keluar Fullscreen</option>
+                  <option value="Klik Kanan">Klik Kanan</option>
+                  <option value="Shortcut Keyboard">Shortcut</option>
+                  <option value="DevTools">DevTools</option>
+                  <option value="Mouse Leave">Mouse Leave</option>
+                  <option value="Screenshot">Screenshot</option>
+                </select>
+                <button class="btn btn-sm btn-danger" onclick="confirmResetKecurangan()">
+                  <i class="bi bi-trash3"></i> Reset Semua
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="loadKecurangan()">
+                  <i class="bi bi-arrow-clockwise"></i>
+                </button>
+              </div>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive" style="max-height:70vh;overflow-y:auto">
+                <table class="table table-hover table-sm mb-0 align-middle">
+                  <thead class="table-light sticky-top">
+                    <tr>
+                      <th style="width:50px">#</th>
+                      <th>Waktu</th>
+                      <th>NIS</th>
+                      <th>Nama</th>
+                      <th>Jenis</th>
+                    </tr>
+                  </thead>
+                  <tbody id="cheatBody">
+                    <tr><td colspan="5" class="text-center text-muted py-5">
+                      <div class="spinner-border spinner-border-sm me-2"></div>Memuat data...
+                    </td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="card-footer bg-white small text-muted" id="cheatFooter">
+              Total: 0 record
+            </div>
+          </div>
+        </section>
+
+        <!-- ===== HASIL SECTION ===== -->
+        <section id="sec-hasil" class="section-panel d-none">
+          <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white d-flex align-items-center justify-content-between flex-wrap gap-2">
+              <h6 class="mb-0 fw-bold"><i class="bi bi-clipboard-data-fill text-success"></i> Rekap Nilai</h6>
+              <div class="d-flex gap-2 flex-wrap">
+                <div class="input-group input-group-sm" style="width:220px">
+                  <span class="input-group-text"><i class="bi bi-search"></i></span>
+                  <input type="text" class="form-control" placeholder="Cari NIS/Nama..." id="searchHasil" oninput="filterHasil()">
+                </div>
+                <button class="btn btn-sm btn-danger" onclick="confirmResetHasil()">
+                  <i class="bi bi-trash3"></i> Reset Semua Hasil
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="loadHasil()">
+                  <i class="bi bi-arrow-clockwise"></i>
+                </button>
+              </div>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-hover table-sm mb-0 align-middle">
+                  <thead class="table-light">
+                    <tr>
+                      <th style="width:50px">#</th>
+                      <th>NIS</th>
+                      <th>Nama</th>
+                      <th>Sekolah</th>
+                      <th>Mapel</th>
+                      <th>Skor</th>
+                      <th>Benar</th>
+                      <th>Salah</th>
+                      <th>Selesai</th>
+                      <th style="width:120px">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody id="hasilBody">
+                    <tr><td colspan="10" class="text-center text-muted py-5">
+                      <div class="spinner-border spinner-border-sm me-2"></div>Memuat data...
+                    </td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="card-footer bg-white small text-muted" id="hasilFooter">
+              Total: 0 hasil
+            </div>
+          </div>
+        </section>
+
+        <!-- ===== SOAL SECTION ===== -->
+        <section id="sec-soal" class="section-panel d-none">
+          <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white d-flex align-items-center justify-content-between flex-wrap gap-2">
+              <h6 class="mb-0 fw-bold"><i class="bi bi-journal-text text-primary"></i> Bank Soal</h6>
+              <div class="d-flex gap-2 flex-wrap">
+                <select class="form-select form-select-sm" style="width:180px" id="filterMapelSoal" onchange="filterSoal()">
+                  <option value="">Semua Mapel</option>
+                </select>
+                <button class="btn btn-sm btn-outline-secondary" onclick="loadSoal()">
+                  <i class="bi bi-arrow-clockwise"></i>
+                </button>
+              </div>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive" style="max-height:70vh;overflow-y:auto">
+                <table class="table table-hover table-sm mb-0 align-middle">
+                  <thead class="table-light sticky-top">
+                    <tr>
+                      <th style="width:60px">No</th>
+                      <th>Mapel</th>
+                      <th>Soal</th>
+                      <th>A</th>
+                      <th>B</th>
+                      <th>C</th>
+                      <th>D</th>
+                      <th>E</th>
+                      <th>Kunci</th>
+                      <th>Gambar</th>
+                    </tr>
+                  </thead>
+                  <tbody id="soalBody">
+                    <tr><td colspan="10" class="text-center text-muted py-5">
+                      <div class="spinner-border spinner-border-sm me-2"></div>Memuat data...
+                    </td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="card-footer bg-white small text-muted" id="soalFooter">
+              Total: 0 soal
+            </div>
+          </div>
+        </section>
+
+      </div><!-- /content-area -->
+    </main>
+  </div><!-- /dashboardPage -->
+
+  <!-- ===== CONFIRMATION MODAL ===== -->
+  <div class="modal fade" id="confirmModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+      <div class="modal-content">
+        <div class="modal-body text-center py-4">
+          <div class="fs-1 mb-3" id="confirmIcon">⚠️</div>
+          <h5 class="fw-bold" id="confirmTitle">Konfirmasi</h5>
+          <p class="text-muted small" id="confirmMsg">Apakah Anda yakin?</p>
+          <div class="d-flex gap-2 justify-content-center mt-3">
+            <button class="btn btn-secondary btn-sm px-4" data-bs-dismiss="modal">Batal</button>
+            <button class="btn btn-danger btn-sm px-4" id="confirmBtn">Ya</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TOAST CONTAINER ===== -->
+  <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer"></div>
+
+  <!-- ===== NOTIFICATION AUDIO ===== -->
+  <audio id="alertSound" preload="auto">
+    <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2LkZqTi4F5dXmBipOcnZeQiIB9foOLk5qcmJGJgH17gImSnJyYkImAe3uBipOcnZiRiYCAf4OLk5qcmJCIf317gYqTnJ2YkYmAgH+Di5OanJiQiH99e4GKk5ydmJGJgIB/g4uTmpyYkIh/fXuBipOcnZiRiYCAf4OLk5qcmA==" type="audio/wav">
+  </audio>
+
+  <!-- Bootstrap 5 JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Dashboard JS -->
+  <script src="dashboard.js"></script>
+</body>
+</html>
