@@ -1,6 +1,6 @@
 // ============================================================
-// CBT SMASSIC 2026 — SISWA CLIENT (FULL UPGRADE)
-// Multi-type, LaTeX math, Server timer, Warning system
+// CBT SMASSIC 2026 — SISWA CLIENT (NIS + PASSWORD LOGIN)
+// Multi-type soal, LaTeX math, Server timer, Warning system
 // ============================================================
 
 const SUPABASE_URL = 'https://wwchdqtqakpbjswkavnm.supabase.co';
@@ -14,15 +14,19 @@ let soalList = [];
 let jawaban = {};
 let flagged = {};
 let currentIndex = 0;
+let violations = 0;
+let lastViolationTime = 0;
 let timerInterval = null;
 let heartbeatInterval = null;
 let warningChannel = null;
 let examActive = false;
 let examSubmitted = false;
+let isBlocked = false;
+let clientBlocked = false;
 let waktuMulai = '';
 let sisaDetik = 0;
-let violations = {};
-const MAX_VIOLATIONS = 20;
+let acListenersAttached = false;
+const DEFAULT_DURASI = 90;
 
 const MAPEL_LIST = [
   { nama: 'Matematika', icon: '🔢', color: '#3b82f6' },
@@ -32,22 +36,28 @@ const MAPEL_LIST = [
 
 // ============ INIT ============
 document.addEventListener('DOMContentLoaded', () => {
-  const saved = localStorage.getItem('cbt_siswa');
-  if (saved) {
-    try {
+  showPage('loginPage');
+
+  // Try restore session
+  try {
+    const saved = localStorage.getItem('cbt_siswa');
+    if (saved) {
       currentSiswa = JSON.parse(saved);
+      loadViolationsLocal();
+      if (violations >= 3) { showBlocked(); return; }
       showPage('mapelPage');
       renderMapelButtons();
-    } catch (e) { showPage('loginPage'); }
-  } else {
-    showPage('loginPage');
-  }
+    }
+  } catch (e) { showPage('loginPage'); }
+
+  // Enter key handlers
+  document.getElementById('inputNIS').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('inputPassword').focus(); });
+  document.getElementById('inputPassword').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 });
 
 // ============ RENDER MATH ============
 function renderMath(el) {
   if (!el) return;
-  // Wait for KaTeX to load
   const tryRender = () => {
     if (window.renderMathInElement) {
       renderMathInElement(el, {
@@ -59,21 +69,17 @@ function renderMath(el) {
         ],
         throwOnError: false
       });
-    } else {
-      setTimeout(tryRender, 200);
-    }
+    } else { setTimeout(tryRender, 200); }
   };
   tryRender();
 }
 
-// ============ PAGE MANAGEMENT ============
+// ============ PAGES ============
 function showPage(id) {
   ['loginPage', 'mapelPage', 'examPage', 'resultPage'].forEach(p => {
-    const el = document.getElementById(p);
-    if (!el) return;
-    if (p === id) { el.classList.add('active'); el.style.display = ''; }
-    else { el.classList.remove('active'); el.style.display = 'none'; }
+    document.getElementById(p).style.display = (p === id) ? (p === 'examPage' ? 'flex' : 'flex') : 'none';
   });
+  if (id !== 'examPage') examActive = false;
 }
 
 function showL() { document.getElementById('loader').classList.add('active'); }
@@ -83,83 +89,168 @@ function toast(msg, type = 'info') {
   const wrap = document.getElementById('toastWrap');
   const el = document.createElement('div');
   el.className = `toast-msg ${type}`;
-  const icons = { success: 'bi-check-circle-fill', error: 'bi-x-circle-fill', warning: 'bi-exclamation-triangle-fill', info: 'bi-info-circle-fill' };
-  el.innerHTML = `<i class="bi ${icons[type] || icons.info}"></i> ${msg}`;
+  el.textContent = msg;
   wrap.appendChild(el);
-  setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateX(40px)'; setTimeout(() => el.remove(), 300); }, 4000);
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 4000);
 }
 
-// ============ LOGIN ============
-async function doLogin(e) {
-  e.preventDefault();
+function togglePw() {
+  const inp = document.getElementById('inputPassword');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+// ============ LOGIN (NIS + PASSWORD) ============
+async function doLogin() {
   const nis = document.getElementById('inputNIS').value.trim();
-  const nama = document.getElementById('inputNama').value.trim();
+  const pw = document.getElementById('inputPassword').value.trim();
   const alertEl = document.getElementById('loginAlert');
-  alertEl.classList.add('d-none');
+  alertEl.classList.remove('show');
 
-  if (!nis || !nama) { alertEl.textContent = 'NIS dan Nama wajib diisi'; alertEl.classList.remove('d-none'); return false; }
+  if (!nis || !pw) {
+    alertEl.textContent = 'NIS dan Password wajib diisi!';
+    alertEl.classList.add('show');
+    return;
+  }
 
+  document.getElementById('btnLogin').disabled = true;
   showL();
+
   try {
-    const { data, error } = await sb.from('SISWA').select('NIS, Nama, Sekolah, Status').eq('NIS', nis).maybeSingle();
-    if (error) throw error;
-    if (!data) { hideL(); alertEl.textContent = 'NIS tidak terdaftar'; alertEl.classList.remove('d-none'); return false; }
-    if (data.Nama.trim().toLowerCase() !== nama.trim().toLowerCase()) {
-      hideL(); alertEl.textContent = 'Nama tidak cocok'; alertEl.classList.remove('d-none'); return false;
-    }
-    const st = (data.Status || '').toUpperCase();
-    if (st === 'BLOCKED' || st === 'KICKED') {
-      hideL(); alertEl.textContent = 'Akun Anda diblokir. Hubungi pengawas.'; alertEl.classList.remove('d-none'); return false;
-    }
-    if (st === 'SELESAI') {
-      hideL(); alertEl.textContent = 'Anda sudah menyelesaikan ujian.'; alertEl.classList.remove('d-none'); return false;
+    const { data, error } = await sb
+      .from('SISWA')
+      .select('NIS, Password, Nama, Sekolah, Status')
+      .eq('NIS', nis)
+      .eq('Password', pw)
+      .maybeSingle();
+
+    hideL();
+    document.getElementById('btnLogin').disabled = false;
+
+    if (error || !data) {
+      alertEl.textContent = 'NIS atau Password salah!';
+      alertEl.classList.add('show');
+      return;
     }
 
-    // Update status
+    const status = (data.Status || '').toUpperCase();
+    if (status === 'KICKED') {
+      alertEl.textContent = 'Anda dikeluarkan. Hubungi pengawas.';
+      alertEl.classList.add('show');
+      return;
+    }
+    if (status === 'BLOCKED') {
+      alertEl.textContent = 'Akun DIBLOKIR. Hubungi pengawas.';
+      alertEl.classList.add('show');
+      return;
+    }
+    if (status === 'SELESAI') {
+      alertEl.textContent = 'Anda sudah menyelesaikan ujian.';
+      alertEl.classList.add('show');
+      return;
+    }
+
+    // Update status to ONLINE
     await sb.from('SISWA').update({ Status: 'ONLINE', Last_Heartbeat: new Date().toISOString() }).eq('NIS', nis);
 
     currentSiswa = { NIS: data.NIS, Nama: data.Nama, Sekolah: data.Sekolah || '' };
     localStorage.setItem('cbt_siswa', JSON.stringify(currentSiswa));
-    hideL();
-    toast(`Selamat datang, ${data.Nama}!`, 'success');
+
+    violations = 0;
+    clientBlocked = false;
+    isBlocked = false;
+    clearViolationsLocal();
+
+    toast('Login berhasil! Selamat datang, ' + data.Nama, 'success');
     showPage('mapelPage');
     renderMapelButtons();
-  } catch (err) {
-    hideL(); alertEl.textContent = 'Gagal login: ' + err.message; alertEl.classList.remove('d-none');
+
+  } catch (e) {
+    hideL();
+    document.getElementById('btnLogin').disabled = false;
+    alertEl.textContent = 'Kesalahan: ' + e.message;
+    alertEl.classList.add('show');
   }
-  return false;
 }
 
 function doLogout() {
-  if (examActive) { toast('Selesaikan ujian terlebih dahulu', 'warning'); return; }
+  if (examActive) { toast('Selesaikan ujian terlebih dahulu!', 'warning'); return; }
   if (currentSiswa) {
     sb.from('SISWA').update({ Status: 'OFFLINE' }).eq('NIS', currentSiswa.NIS).then(() => {});
   }
   unsubscribeWarning();
+  fullResetState();
   localStorage.removeItem('cbt_siswa');
   currentSiswa = null;
   showPage('loginPage');
 }
 
-function backToLogin() {
-  localStorage.removeItem('cbt_siswa');
-  currentSiswa = null;
-  showPage('loginPage');
+// ============ RECHECK BLOCK/KICK ============
+async function recheckBlock() {
+  if (!currentSiswa) { location.reload(); return; }
+  const btn = document.getElementById('recheckBlockBtn');
+  btn.disabled = true; btn.textContent = '⏳ Mengecek...';
+  try {
+    const { data } = await sb.from('SISWA').select('Status').eq('NIS', currentSiswa.NIS).maybeSingle();
+    btn.disabled = false; btn.textContent = '🔄 Cek Ulang Status';
+    if (data && (data.Status || '').toUpperCase() === 'BLOCKED') {
+      document.getElementById('recheckInfo').textContent = 'Masih diblokir. (' + new Date().toLocaleTimeString('id-ID') + ')';
+    } else {
+      fullResetState();
+      document.getElementById('blockedOverlay').classList.remove('active');
+      toast('Akun diaktivasi!', 'success');
+      showPage('loginPage');
+      document.getElementById('inputNIS').value = currentSiswa.NIS;
+      currentSiswa = null; localStorage.removeItem('cbt_siswa');
+    }
+  } catch (e) { btn.disabled = false; btn.textContent = '🔄 Cek Ulang Status'; }
+}
+
+async function recheckKick() {
+  if (!currentSiswa) { location.reload(); return; }
+  const btn = document.getElementById('recheckKickBtn');
+  btn.disabled = true; btn.textContent = '⏳ Mengecek...';
+  try {
+    const { data } = await sb.from('SISWA').select('Status').eq('NIS', currentSiswa.NIS).maybeSingle();
+    btn.disabled = false; btn.textContent = '🔄 Cek Ulang Status';
+    if (data && (data.Status || '').toUpperCase() === 'KICKED') {
+      document.getElementById('recheckKickInfo').textContent = 'Masih dikeluarkan. (' + new Date().toLocaleTimeString('id-ID') + ')';
+    } else {
+      fullResetState();
+      document.getElementById('kickedOverlay').classList.remove('active');
+      toast('Akun diaktivasi!', 'success');
+      showPage('loginPage');
+      document.getElementById('inputNIS').value = currentSiswa.NIS;
+      currentSiswa = null; localStorage.removeItem('cbt_siswa');
+    }
+  } catch (e) { btn.disabled = false; btn.textContent = '🔄 Cek Ulang Status'; }
+}
+
+// ============ FULL RESET ============
+function fullResetState() {
+  examActive = false; examSubmitted = false; isBlocked = false; clientBlocked = false;
+  violations = 0; currentMapel = ''; soalList = []; jawaban = {}; flagged = {}; currentIndex = 0;
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
+  try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
+  if (currentSiswa) clearViolationsLocal();
+  document.getElementById('blockedOverlay').classList.remove('active');
+  document.getElementById('kickedOverlay').classList.remove('active');
+  document.getElementById('cheatOverlay').classList.remove('active');
 }
 
 // ============ MAPEL SELECT ============
 function renderMapelButtons() {
   if (!currentSiswa) return;
-  document.getElementById('mapelWelcome').textContent = `Selamat datang, ${currentSiswa.Nama}`;
+  document.getElementById('mapelWelcome').textContent = 'Selamat Datang, ' + currentSiswa.Nama;
   const container = document.getElementById('mapelButtons');
   container.innerHTML = MAPEL_LIST.map(m => `
     <button class="mapel-btn" onclick="startExam('${m.nama}')">
-      <div class="mapel-icon" style="background:${m.color}20;color:${m.color}">${m.icon}</div>
-      <div style="text-align:left">
-        <div style="font-size:15px">${m.nama}</div>
-        <div style="font-size:11px;color:var(--gray);font-weight:400">Mulai ujian ${m.nama}</div>
+      <div class="mapel-icon" style="background:${m.color}15;color:${m.color}">${m.icon}</div>
+      <div class="mapel-info">
+        <div class="mapel-name">${m.nama}</div>
+        <div class="mapel-sub">Mulai ujian ${m.nama}</div>
       </div>
-      <i class="bi bi-chevron-right ms-auto" style="color:var(--gray)"></i>
+      <span style="color:var(--gray)">→</span>
     </button>
   `).join('');
 }
@@ -169,40 +260,41 @@ async function startExam(mapel) {
   currentMapel = mapel;
   showL();
   try {
-    // 1. Check pengaturan ujian (timer dari server)
-    const { data: pengaturan, error: pengErr } = await sb.from('PENGATURAN')
-      .select('Durasi_menit, Status_ujian, Waktu_mulai, Waktu_selesai, Acak_soal')
-      .eq('Mapel', mapel).maybeSingle();
+    // 1. Check pengaturan
+    let durasi = DEFAULT_DURASI * 60;
+    let shouldShuffle = true;
+    try {
+      const { data: peng } = await sb.from('PENGATURAN')
+        .select('Durasi_menit, Status_ujian, Waktu_mulai, Waktu_selesai, Acak_soal')
+        .eq('Mapel', mapel).maybeSingle();
 
-    if (pengErr) console.warn('Pengaturan not found, using defaults');
+      if (peng) {
+        if (peng.Status_ujian === 'SELESAI') { hideL(); toast('Ujian ' + mapel + ' sudah berakhir.', 'error'); return; }
+        if (peng.Status_ujian === 'BELUM') { hideL(); toast('Ujian ' + mapel + ' belum dimulai. Tunggu pengawas.', 'warning'); return; }
+        shouldShuffle = peng.Acak_soal !== false;
+        if (peng.Waktu_selesai) {
+          const endTime = new Date(peng.Waktu_selesai).getTime();
+          const remaining = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
+          if (remaining <= 0) { hideL(); toast('Waktu ujian ' + mapel + ' sudah habis.', 'error'); return; }
+          durasi = remaining;
+        } else {
+          durasi = (peng.Durasi_menit || DEFAULT_DURASI) * 60;
+        }
+      }
+    } catch (e) { console.warn('Pengaturan not found, using defaults'); }
 
-    // Check if exam is active
-    if (pengaturan && pengaturan.Status_ujian === 'SELESAI') {
-      hideL(); toast('Ujian ' + mapel + ' sudah berakhir.', 'error'); return;
-    }
-    if (pengaturan && pengaturan.Status_ujian === 'BELUM') {
-      hideL(); toast('Ujian ' + mapel + ' belum dimulai. Tunggu instruksi pengawas.', 'warning'); return;
-    }
+    // 2. Check existing result
+    const { data: existing } = await sb.from('HASIL').select('id').eq('NIS', currentSiswa.NIS).eq('Mapel', mapel).maybeSingle();
+    if (existing) { hideL(); toast('Anda sudah mengerjakan ujian ' + mapel, 'warning'); return; }
 
-    // 2. Check if already submitted
-    const { data: existingResult } = await sb.from('HASIL')
-      .select('id').eq('NIS', currentSiswa.NIS).eq('Mapel', mapel).maybeSingle();
-    if (existingResult) {
-      hideL(); toast('Anda sudah mengerjakan ujian ' + mapel, 'warning'); return;
-    }
-
-    // 3. Load soal with Kunci, Bobot, Tipe
+    // 3. Load soal (include Kunci, Bobot, Tipe)
     const { data: soalRaw, error: soalErr } = await sb.from('SOAL')
       .select('No, Soal, Opsi_A, Opsi_B, Opsi_C, Opsi_D, Opsi_E, Kunci, Bobot, Tipe, Gambar, Mapel')
       .eq('Mapel', mapel).order('No', { ascending: true });
 
-    if (soalErr || !soalRaw || !soalRaw.length) {
-      hideL(); toast('Soal tidak ditemukan untuk ' + mapel, 'error'); return;
-    }
+    if (soalErr || !soalRaw || !soalRaw.length) { hideL(); toast('Soal tidak ditemukan untuk ' + mapel, 'error'); return; }
 
-    // 4. Shuffle if enabled
     let finalSoal = [...soalRaw];
-    const shouldShuffle = pengaturan ? pengaturan.Acak_soal : true;
     if (shouldShuffle) {
       for (let j = finalSoal.length - 1; j > 0; j--) {
         const k = Math.floor(Math.random() * (j + 1));
@@ -210,90 +302,98 @@ async function startExam(mapel) {
       }
     }
 
-    // 5. Calculate timer from server pengaturan
-    let durasi = 90; // default 90 minutes
-    if (pengaturan) {
-      if (pengaturan.Waktu_selesai) {
-        // Calculate remaining time from server end time
-        const endTime = new Date(pengaturan.Waktu_selesai).getTime();
-        const now = Date.now();
-        const remaining = Math.max(0, Math.floor((endTime - now) / 1000));
-        if (remaining <= 0) {
-          hideL(); toast('Waktu ujian ' + mapel + ' sudah habis.', 'error'); return;
-        }
-        durasi = remaining; // in seconds
-      } else {
-        durasi = (pengaturan.Durasi_menit || 90) * 60;
-      }
-    } else {
-      durasi = 90 * 60;
-    }
-
     hideL();
     initExam(mapel, finalSoal, durasi);
-  } catch (e) {
-    hideL(); toast('Gagal: ' + e.message, 'error');
-  }
+  } catch (e) { hideL(); toast('Gagal: ' + e.message, 'error'); }
 }
 
 // ============ INIT EXAM ============
 function initExam(mapel, soal, durasiDetik) {
   soalList = soal;
-  jawaban = {};
-  flagged = {};
-  currentIndex = 0;
-  examActive = true;
   examSubmitted = false;
-  waktuMulai = new Date().toISOString();
-  sisaDetik = durasiDetik;
-  violations = {};
+  isBlocked = false;
+  clientBlocked = false;
+
+  if (violations >= 3) { showBlocked(); return; }
 
   // Restore saved answers
-  const savedAns = loadJawabanLocal();
-  if (savedAns && savedAns.mapel === mapel) {
-    jawaban = savedAns.jawaban || {};
+  const saved = loadJawabanLocal();
+  if (saved && saved.mapel === mapel) {
+    jawaban = saved.jawaban || {};
+    flagged = saved.flagged || {};
+    currentIndex = saved.currentIndex || 0;
+    waktuMulai = saved.waktuMulai || new Date().toISOString();
+    // Adjust remaining time if saved
+    if (saved.sisaDetik && saved.time) {
+      const elapsed = Math.floor((Date.now() - saved.time) / 1000);
+      sisaDetik = Math.max(0, saved.sisaDetik - elapsed);
+    } else {
+      sisaDetik = durasiDetik;
+    }
+    toast('Sesi dipulihkan! ' + Object.keys(jawaban).length + ' jawaban.', 'success');
+  } else {
+    jawaban = {};
+    flagged = {};
+    currentIndex = 0;
+    waktuMulai = new Date().toISOString();
+    sisaDetik = durasiDetik;
   }
 
   // UI
   document.getElementById('examMapelBadge').textContent = mapel;
-  document.getElementById('examStudentName').textContent = currentSiswa.Nama;
-  showPage('examPage');
+  document.getElementById('examStudentName').textContent = currentSiswa.Nama + ' (' + currentSiswa.NIS + ')';
 
-  renderNavNumbers();
-  renderSoal(0);
+  showPage('examPage');
+  examActive = false; // will be set after delay
+
+  buildGrid();
+  renderSoal(currentIndex);
   startTimer();
   startHeartbeat();
-  setupAntiCheat();
   subscribeWarning();
 
-  // Request fullscreen
-  try { document.documentElement.requestFullscreen().catch(() => {}); } catch (e) {}
+  if (!acListenersAttached) { setupAntiCheat(); acListenersAttached = true; }
+
+  sb.from('SISWA').update({ Status: 'ONLINE' }).eq('NIS', currentSiswa.NIS).then(() => {});
+  requestFS();
+
+  setTimeout(() => { if (!examSubmitted && !isBlocked && !clientBlocked) examActive = true; }, 3000);
+
+  if (sisaDetik <= 0) { toast('Waktu habis!', 'warning'); doSubmit(true); }
 }
 
-// ============ RENDER NAV NUMBERS ============
-function renderNavNumbers() {
-  const list = document.getElementById('soalNavList');
-  list.innerHTML = soalList.map((s, i) => {
-    const no = i + 1;
-    const cls = [];
-    if (i === currentIndex) cls.push('active');
-    if (jawaban[s.No] || jawaban[String(s.No)]) cls.push('answered');
-    if (flagged[s.No]) cls.push('flagged');
-    return `<div class="nav-num ${cls.join(' ')}" onclick="goToSoal(${i})" title="Soal ${no}">${no}</div>`;
+function requestFS() {
+  try { const el = document.documentElement; if (el.requestFullscreen) el.requestFullscreen(); else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen(); } catch (e) {}
+}
+
+// ============ GRID ============
+function buildGrid() {
+  const grid = document.getElementById('soalGrid');
+  grid.innerHTML = soalList.map((s, i) => {
+    return `<div class="soal-num" onclick="goToSoal(${i})">${i + 1}</div>`;
   }).join('');
-  document.getElementById('examProgress').textContent = `${currentIndex + 1}/${soalList.length}`;
+  updateGrid();
 }
 
-function updateNavHighlight() {
-  const nums = document.querySelectorAll('.nav-num');
+function updateGrid() {
+  const nums = document.querySelectorAll('.soal-num');
+  let answered = 0, unanswered = 0, flagCount = 0;
   nums.forEach((el, i) => {
     const s = soalList[i];
-    el.className = 'nav-num';
+    el.className = 'soal-num';
     if (i === currentIndex) el.classList.add('active');
-    if (jawaban[s.No] || jawaban[String(s.No)]) el.classList.add('answered');
-    if (flagged[s.No]) el.classList.add('flagged');
+    const ans = jawaban[s.No] || jawaban[String(s.No)] || '';
+    if (ans.toString().trim()) { el.classList.add('answered'); answered++; } else { unanswered++; }
+    if (flagged[s.No]) { el.classList.add('flagged'); flagCount++; }
   });
-  document.getElementById('examProgress').textContent = `${currentIndex + 1}/${soalList.length}`;
+  document.getElementById('stAnswered').textContent = answered;
+  document.getElementById('stUnanswered').textContent = unanswered;
+  document.getElementById('stFlagged').textContent = flagCount;
+
+  // Violation badge
+  const vb = document.getElementById('violationBadge');
+  if (violations > 0) { vb.className = 'violation-badge warn'; vb.textContent = '⚠️ ' + violations + '/3'; }
+  else { vb.className = 'violation-badge clean'; vb.textContent = '✅ Bersih'; }
 }
 
 // ============ RENDER SOAL (Multi-type) ============
@@ -302,163 +402,206 @@ function renderSoal(index) {
   currentIndex = index;
   const s = soalList[index];
   const tipe = (s.Tipe || 'PG').toUpperCase();
-  const currentAnswer = jawaban[s.No] || jawaban[String(s.No)] || '';
+  const currentAnswer = (jawaban[s.No] || jawaban[String(s.No)] || '').toString();
   const card = document.getElementById('questionCard');
 
   // Tipe badge
   const tipeBadges = { PG: ['Pilihan Ganda', 'tipe-pg'], BS: ['Benar / Salah', 'tipe-bs'], IS: ['Isian Singkat', 'tipe-is'] };
   const [tipeLabel, tipeClass] = tipeBadges[tipe] || tipeBadges.PG;
 
-  // Gambar
-  const imgHtml = s.Gambar ? `<img src="${esc(s.Gambar)}" class="question-img" alt="Gambar soal" onerror="this.style.display='none'">` : '';
+  // Image
+  let imgHtml = '';
+  if (s.Gambar && s.Gambar.trim()) {
+    imgHtml = `<div class="question-img-wrap">
+      <img src="${esc(s.Gambar)}" alt="Gambar soal" onclick="zoomImg('${esc(s.Gambar)}')" onerror="this.parentElement.innerHTML='<div style=\\'color:var(--danger);padding:12px\\'>⚠️ Gambar gagal dimuat</div>'">
+      <div class="img-hint">Klik untuk memperbesar</div>
+    </div>`;
+  }
 
   let optionsHtml = '';
 
   if (tipe === 'PG') {
-    // Pilihan Ganda
     const options = [];
     if (s.Opsi_A) options.push({ key: 'A', text: s.Opsi_A });
     if (s.Opsi_B) options.push({ key: 'B', text: s.Opsi_B });
     if (s.Opsi_C) options.push({ key: 'C', text: s.Opsi_C });
     if (s.Opsi_D) options.push({ key: 'D', text: s.Opsi_D });
     if (s.Opsi_E) options.push({ key: 'E', text: s.Opsi_E });
-
     optionsHtml = `<div class="options-list">${options.map(o => `
-      <div class="option-item ${currentAnswer.toUpperCase() === o.key ? 'selected' : ''}" onclick="selectAnswer('${s.No}','${o.key}')">
+      <div class="option-item${currentAnswer.toUpperCase() === o.key ? ' selected' : ''}" onclick="selectAnswer('${s.No}','${o.key}')">
         <div class="option-letter">${o.key}</div>
         <div class="option-text">${esc(o.text)}</div>
       </div>
     `).join('')}</div>`;
 
   } else if (tipe === 'BS') {
-    // Benar / Salah
     optionsHtml = `<div class="bs-options">
-      <div class="bs-option benar ${currentAnswer.toUpperCase() === 'BENAR' ? 'selected' : ''}" onclick="selectAnswer('${s.No}','Benar')">
-        <div style="font-size:28px;margin-bottom:4px">✅</div> Benar
+      <div class="bs-option${currentAnswer.toUpperCase() === 'BENAR' ? ' selected' : ''}" onclick="selectAnswer('${s.No}','Benar')">
+        <div class="bs-icon">✅</div> Benar
       </div>
-      <div class="bs-option salah ${currentAnswer.toUpperCase() === 'SALAH' ? 'selected' : ''}" onclick="selectAnswer('${s.No}','Salah')">
-        <div style="font-size:28px;margin-bottom:4px">❌</div> Salah
+      <div class="bs-option${currentAnswer.toUpperCase() === 'SALAH' ? ' selected' : ''}" onclick="selectAnswer('${s.No}','Salah')">
+        <div class="bs-icon">❌</div> Salah
       </div>
     </div>`;
 
   } else if (tipe === 'IS') {
-    // Isian Singkat
-    optionsHtml = `
-      <div style="margin-top:8px">
-        <label style="font-size:13px;font-weight:600;color:var(--gray);margin-bottom:8px;display:block">Ketik jawaban Anda:</label>
-        <input type="text" class="isian-input" id="isianInput" value="${esc(currentAnswer)}" 
-          placeholder="Ketik jawaban di sini..." 
-          oninput="selectAnswer('${s.No}', this.value)" 
-          autocomplete="off" spellcheck="false">
-      </div>`;
+    optionsHtml = `<div class="isian-group">
+      <div class="isian-label">Ketik jawaban Anda:</div>
+      <input type="text" class="isian-input" id="isianInput" value="${esc(currentAnswer)}"
+        placeholder="Ketik jawaban di sini..." oninput="selectAnswer('${s.No}', this.value)"
+        autocomplete="off" spellcheck="false">
+    </div>`;
   }
 
+  // Build card
   card.innerHTML = `
-    <div class="question-number">
-      <div class="num">${index + 1}</div>
-      <span class="tipe-badge ${tipeClass}">${tipeLabel}</span>
-      ${s.Bobot && s.Bobot > 1 ? `<span class="tipe-badge" style="background:#fef3c7;color:#92400e">Bobot: ${s.Bobot}</span>` : ''}
+    <div class="question-header">
+      <div class="question-num-wrap">
+        <div class="question-num">${index + 1}</div>
+        <div class="question-total">dari ${soalList.length} soal</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <span class="tipe-badge ${tipeClass}">${tipeLabel}</span>
+        ${s.Bobot && s.Bobot > 1 ? '<span class="tipe-badge" style="background:#fef3c7;color:#92400e">Bobot ' + s.Bobot + '</span>' : ''}
+      </div>
     </div>
-    <div class="question-text" id="questionText">${esc(s.Soal)}</div>
+    <div class="question-text" id="qText">${esc(s.Soal)}</div>
     ${imgHtml}
     ${optionsHtml}
   `;
 
-  // Render math in question text and options
+  // Render math
   setTimeout(() => {
-    renderMath(document.getElementById('questionText'));
+    renderMath(document.getElementById('qText'));
     document.querySelectorAll('.option-text').forEach(el => renderMath(el));
   }, 50);
 
-  updateNavHighlight();
+  updateGrid();
   updateFlagButton();
+  updateNavButtons();
 
   // Focus isian input
   if (tipe === 'IS') {
-    setTimeout(() => {
-      const inp = document.getElementById('isianInput');
-      if (inp) inp.focus();
-    }, 100);
+    setTimeout(() => { const inp = document.getElementById('isianInput'); if (inp) inp.focus(); }, 100);
   }
 }
 
-// ============ ANSWER HANDLING ============
-function selectAnswer(no, value) {
-  jawaban[no] = value;
+function selectAnswer(no, val) {
+  jawaban[no] = val;
   saveJawabanLocal();
-  // Re-render if PG or BS to show selection
   const tipe = (soalList[currentIndex]?.Tipe || 'PG').toUpperCase();
-  if (tipe !== 'IS') {
-    renderSoal(currentIndex);
-  } else {
-    updateNavHighlight();
-  }
+  if (tipe !== 'IS') renderSoal(currentIndex);
+  else updateGrid();
 }
 
 // ============ NAVIGATION ============
-function goToSoal(i) { renderSoal(i); }
-function prevSoal() { if (currentIndex > 0) renderSoal(currentIndex - 1); }
-function nextSoal() { if (currentIndex < soalList.length - 1) renderSoal(currentIndex + 1); }
+function goToSoal(i) {
+  renderSoal(i);
+  // Close mobile sidebar
+  document.getElementById('soalSidebar').classList.remove('show');
+}
+function prevSoal() { if (currentIndex > 0) { renderSoal(currentIndex - 1); saveJawabanLocal(); } }
+function nextSoal() { if (currentIndex < soalList.length - 1) { renderSoal(currentIndex + 1); saveJawabanLocal(); } }
+
+function updateNavButtons() {
+  document.getElementById('btnPrev').disabled = currentIndex === 0;
+  const btnNext = document.getElementById('btnNext');
+  if (currentIndex === soalList.length - 1) {
+    btnNext.innerHTML = '📤 Kumpulkan';
+    btnNext.className = 'btn-nav submit';
+    btnNext.onclick = () => openSubmitModal();
+    btnNext.disabled = false;
+  } else {
+    btnNext.innerHTML = 'Selanjutnya →';
+    btnNext.className = 'btn-nav';
+    btnNext.onclick = () => nextSoal();
+    btnNext.disabled = false;
+  }
+}
 
 function toggleFlag() {
   const s = soalList[currentIndex];
   if (!s) return;
   flagged[s.No] = !flagged[s.No];
-  updateNavHighlight();
+  saveJawabanLocal();
+  updateGrid();
   updateFlagButton();
 }
 
 function updateFlagButton() {
   const s = soalList[currentIndex];
   const btn = document.getElementById('btnFlag');
-  if (s && flagged[s.No]) { btn.classList.add('active'); btn.innerHTML = '<i class="bi bi-flag-fill"></i> Ditandai'; }
-  else { btn.classList.remove('active'); btn.innerHTML = '<i class="bi bi-flag"></i> Ragu'; }
+  if (s && flagged[s.No]) { btn.classList.add('active'); btn.textContent = '🚩 Ditandai'; }
+  else { btn.classList.remove('active'); btn.textContent = '🚩 Tandai'; }
+}
+
+function toggleNavPanel() {
+  document.getElementById('soalSidebar').classList.toggle('show');
+}
+
+function zoomImg(src) {
+  document.getElementById('zoomImg').src = src;
+  document.getElementById('imgZoom').classList.add('active');
 }
 
 // ============ TIMER ============
 function startTimer() {
-  clearInterval(timerInterval);
+  if (timerInterval) clearInterval(timerInterval);
   updateTimerDisplay();
   timerInterval = setInterval(() => {
     sisaDetik--;
     updateTimerDisplay();
-    if (sisaDetik <= 0) {
-      clearInterval(timerInterval);
-      toast('⏰ Waktu habis! Jawaban dikumpulkan otomatis.', 'warning');
-      doSubmit(true);
-    }
+    if (sisaDetik <= 0) { clearInterval(timerInterval); toast('⏰ Waktu habis!', 'warning'); doSubmit(true); }
+    // Auto-save every 10s
+    if (sisaDetik % 10 === 0) saveJawabanLocal();
   }, 1000);
 }
 
 function updateTimerDisplay() {
   const box = document.getElementById('timerBox');
-  const h = Math.floor(sisaDetik / 3600);
-  const m = Math.floor((sisaDetik % 3600) / 60);
-  const s = sisaDetik % 60;
-  box.textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  box.classList.remove('warning', 'critical');
-  if (sisaDetik <= 60) box.classList.add('critical');
+  const h = Math.floor(Math.max(0, sisaDetik) / 3600);
+  const m = Math.floor((Math.max(0, sisaDetik) % 3600) / 60);
+  const s = Math.max(0, sisaDetik) % 60;
+  box.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  box.classList.remove('warning', 'danger');
+  if (sisaDetik <= 60) box.classList.add('danger');
   else if (sisaDetik <= 300) box.classList.add('warning');
 }
 
 // ============ HEARTBEAT ============
 function startHeartbeat() {
-  clearInterval(heartbeatInterval);
-  const beat = () => {
-    if (!currentSiswa || !examActive) return;
-    sb.from('SISWA').update({ Status: 'ONLINE', Last_Heartbeat: new Date().toISOString() })
-      .eq('NIS', currentSiswa.NIS).then(() => {});
-  };
-  beat();
-  heartbeatInterval = setInterval(beat, 30000); // 30s for scalability
+  if (heartbeatInterval) clearInterval(heartbeatInterval);
+  heartbeatInterval = setInterval(async () => {
+    if (examSubmitted || isBlocked || !examActive || !currentSiswa) return;
+    try {
+      await sb.from('SISWA').update({ Last_Heartbeat: new Date().toISOString() }).eq('NIS', currentSiswa.NIS);
+      const { data } = await sb.from('SISWA').select('Status').eq('NIS', currentSiswa.NIS).maybeSingle();
+      if (data) {
+        const st = (data.Status || '').toUpperCase();
+        if (st === 'KICKED') {
+          examActive = false; examSubmitted = true;
+          clearInterval(timerInterval); clearInterval(heartbeatInterval);
+          document.getElementById('kickedOverlay').classList.add('active');
+          return;
+        }
+        if (st === 'BLOCKED') { showBlocked(); return; }
+      }
+    } catch (e) {}
+  }, 30000);
 }
 
-// ============ WARNING SYSTEM (Realtime) ============
+function showBlocked() {
+  if (isBlocked) return;
+  isBlocked = true; clientBlocked = true; examSubmitted = true; examActive = false;
+  clearInterval(timerInterval); clearInterval(heartbeatInterval);
+  document.getElementById('blockedOverlay').classList.add('active');
+}
+
+// ============ WARNING SYSTEM ============
 function subscribeWarning() {
   unsubscribeWarning();
   if (!currentSiswa) return;
-
-  warningChannel = sb.channel('warnings-' + currentSiswa.NIS);
+  warningChannel = sb.channel('warn-' + currentSiswa.NIS);
   warningChannel.on('postgres_changes', {
     event: 'INSERT', schema: 'public', table: 'PERINGATAN',
     filter: `NIS=eq.${currentSiswa.NIS}`
@@ -467,8 +610,7 @@ function subscribeWarning() {
     if (w && !w.Dibaca) showWarningPopup(w);
   });
   warningChannel.subscribe();
-
-  // Also check for unread warnings on load
+  // Check unread
   checkUnreadWarnings();
 }
 
@@ -479,151 +621,138 @@ function unsubscribeWarning() {
 async function checkUnreadWarnings() {
   if (!currentSiswa) return;
   try {
-    const { data } = await sb.from('PERINGATAN')
-      .select('*').eq('NIS', currentSiswa.NIS).eq('Dibaca', false)
+    const { data } = await sb.from('PERINGATAN').select('*')
+      .eq('NIS', currentSiswa.NIS).eq('Dibaca', false)
       .order('Timestamp', { ascending: false }).limit(1);
     if (data && data.length > 0) showWarningPopup(data[0]);
-  } catch (e) { console.warn('Warning check failed:', e); }
+  } catch (e) {}
 }
 
 function showWarningPopup(warning) {
   const overlay = document.getElementById('warningOverlay');
   const level = (warning.Level || 'YELLOW').toUpperCase();
-  
   overlay.className = 'warning-overlay active ' + level.toLowerCase();
-
   const icons = { YELLOW: '🟡', ORANGE: '🟠', RED: '🔴' };
-  const titles = { YELLOW: 'Peringatan Kuning', ORANGE: 'Peringatan Oranye', RED: 'PERINGATAN MERAH' };
-
+  const titles = { YELLOW: 'Peringatan Kuning', ORANGE: 'Peringatan Oranye', RED: '⛔ PERINGATAN MERAH' };
   document.getElementById('warnIcon').textContent = icons[level] || '⚠️';
   document.getElementById('warnTitle').textContent = titles[level] || 'PERINGATAN';
   document.getElementById('warnMsg').textContent = warning.Pesan || 'Anda mendapat peringatan dari pengawas.';
-
-  // Store warning id for marking as read
   overlay.dataset.warningId = warning.id;
-
-  // Play alert
-  try {
-    const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2LkZqTi4F5dXmBipOcnZeQiIB9foOLk5qcmJGJgH17gImSnJyYkImAe3uBipOcnZiRiYCAf4OLk5qcmA==');
-    audio.play().catch(() => {});
-  } catch (e) {}
 }
 
 async function dismissWarning() {
   const overlay = document.getElementById('warningOverlay');
   const id = overlay.dataset.warningId;
   overlay.classList.remove('active');
-
   if (id) {
-    try {
-      await sb.from('PERINGATAN').update({ Dibaca: true }).eq('id', parseInt(id));
-    } catch (e) { console.warn('Failed to mark warning as read:', e); }
+    try { await sb.from('PERINGATAN').update({ Dibaca: true }).eq('id', parseInt(id)); } catch (e) {}
   }
 }
 
 // ============ ANTI-CHEAT ============
 function setupAntiCheat() {
-  violations = loadViolationsLocal() || {};
+  document.addEventListener('copy', e => { if (!examActive) return; e.preventDefault(); reportCheat('Ganti Tab', 'Copy'); });
+  document.addEventListener('cut', e => { if (!examActive) return; e.preventDefault(); reportCheat('Ganti Tab', 'Cut'); });
+  document.addEventListener('paste', e => { if (!examActive) return; e.preventDefault(); reportCheat('Ganti Tab', 'Paste'); });
+  document.addEventListener('contextmenu', e => { if (!examActive) return; e.preventDefault(); reportCheat('Klik Kanan', 'Right click'); });
+
+  document.addEventListener('keydown', e => {
+    if (!examActive) return;
+    if (e.ctrlKey && 'cvxauspi'.includes(e.key.toLowerCase())) { e.preventDefault(); reportCheat('Shortcut Keyboard', 'Ctrl+' + e.key.toUpperCase()); return false; }
+    if (e.key === 'F12') { e.preventDefault(); reportCheat('DevTools', 'F12'); return false; }
+    if (e.ctrlKey && e.shiftKey && 'ijc'.includes(e.key.toLowerCase())) { e.preventDefault(); reportCheat('DevTools', 'Ctrl+Shift+' + e.key.toUpperCase()); return false; }
+    if (e.key === 'PrintScreen') { e.preventDefault(); reportCheat('Screenshot', 'PrintScreen'); return false; }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); return false; }
+  });
+
+  const handleFS = () => {
+    if (!examActive || examSubmitted || isBlocked || clientBlocked) return;
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      reportCheat('Keluar Fullscreen', 'Fullscreen exit');
+      setTimeout(() => { if (examActive && !examSubmitted && !isBlocked && !clientBlocked) requestFS(); }, 1500);
+    }
+  };
+  document.addEventListener('fullscreenchange', handleFS);
+  document.addEventListener('webkitfullscreenchange', handleFS);
 
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden && examActive && !examSubmitted) reportCheat('Ganti Tab');
+    if (!examActive || examSubmitted || isBlocked) return;
+    if (document.hidden) reportCheat('Ganti Tab', 'Tab hidden');
   });
 
   window.addEventListener('blur', () => {
-    if (examActive && !examSubmitted) reportCheat('Focus Lost');
-  });
-
-  document.addEventListener('fullscreenchange', () => {
-    if (!document.fullscreenElement && examActive && !examSubmitted) {
-      reportCheat('Keluar Fullscreen');
-      try { document.documentElement.requestFullscreen().catch(() => {}); } catch (e) {}
-    }
-  });
-
-  document.addEventListener('contextmenu', (e) => {
-    if (examActive) { e.preventDefault(); reportCheat('Klik Kanan'); }
-  });
-
-  document.addEventListener('keydown', (e) => {
-    if (!examActive) return;
-    const blocked = [
-      e.ctrlKey && e.shiftKey && ['I', 'J', 'C'].includes(e.key.toUpperCase()),
-      e.ctrlKey && ['U', 'S', 'P', 'C', 'A'].includes(e.key.toUpperCase()),
-      e.key === 'F12',
-      e.key === 'PrintScreen',
-      e.altKey && e.key === 'Tab',
-      e.metaKey
-    ];
-    if (blocked.some(Boolean)) {
-      e.preventDefault(); e.stopPropagation();
-      if (e.key === 'PrintScreen') reportCheat('Screenshot');
-      else if (e.key === 'F12' || (e.ctrlKey && e.shiftKey)) reportCheat('DevTools');
-      else reportCheat('Shortcut Keyboard');
-    }
+    if (!examActive || examSubmitted || isBlocked) return;
+    reportCheat('Focus Lost', 'Window blur');
   });
 
   document.addEventListener('mouseleave', () => {
-    if (examActive && !examSubmitted) reportCheat('Mouse Leave');
+    if (!examActive || examSubmitted || isBlocked) return;
+    reportCheat('Mouse Leave', 'Cursor left');
   });
+
+  document.addEventListener('dragstart', e => e.preventDefault());
+  document.addEventListener('selectstart', e => { if (examActive) e.preventDefault(); });
 }
 
-async function reportCheat(jenis) {
-  if (!currentSiswa || examSubmitted) return;
-
-  // Rate limit: max 1 report per type per 5 seconds
-  const key = jenis;
+async function reportCheat(jenis, detail) {
+  if (!examActive || examSubmitted || isBlocked || clientBlocked || !currentSiswa) return;
   const now = Date.now();
-  if (violations[key] && (now - violations[key]) < 5000) return;
-  violations[key] = now;
+  if (now - lastViolationTime < 5000) return;
+  lastViolationTime = now;
+  violations++;
   saveViolationsLocal();
 
-  // Count total violations
-  const totalViolations = Object.keys(violations).reduce((sum, k) => {
-    // Count each type as one violation for threshold
-    return sum + 1;
-  }, 0);
-
-  console.log(`[CHEAT] ${jenis} (total types: ${totalViolations})`);
-
+  // Log to server
   try {
-    await sb.from('KECURANGAN').insert({
-      NIS: currentSiswa.NIS,
-      Nama: currentSiswa.Nama,
-      Jenis: jenis,
-      Timestamp: new Date().toISOString()
+    await fetch(SUPABASE_URL + '/rest/v1/KECURANGAN', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY, 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ NIS: currentSiswa.NIS, Nama: currentSiswa.Nama, Jenis: jenis, Timestamp: new Date().toISOString() })
     });
-  } catch (e) { console.warn('Failed to report cheat:', e); }
+  } catch (e) {}
 
-  // Auto-submit after too many violations
-  if (totalViolations >= MAX_VIOLATIONS && !examSubmitted) {
-    toast('⛔ Terlalu banyak pelanggaran. Ujian otomatis dikumpulkan.', 'error');
-    doSubmit(true);
+  if (violations >= 3) {
+    clientBlocked = true; examActive = false;
+    document.getElementById('cheatMsg').textContent = (detail || jenis) + '. Pelanggaran ke-3! Akun diblokir.';
+    document.getElementById('cheatCount').textContent = 'Pelanggaran ke-' + violations + ' - DIBLOKIR';
+    document.getElementById('cheatOverlay').classList.add('active');
+    try {
+      await fetch(SUPABASE_URL + '/rest/v1/SISWA?NIS=eq.' + encodeURIComponent(currentSiswa.NIS), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY, 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ Status: 'BLOCKED' })
+      });
+    } catch (e) {}
+    setTimeout(() => { document.getElementById('cheatOverlay').classList.remove('active'); showBlocked(); }, 2500);
+    return;
   }
+
+  document.getElementById('cheatMsg').textContent = (detail || jenis) + '. Dicatat dan dilaporkan.';
+  document.getElementById('cheatCount').textContent = 'Pelanggaran ke-' + violations + ' dari 3';
+  document.getElementById('cheatOverlay').classList.add('active');
+  updateGrid();
+}
+
+function dismissCheat() {
+  document.getElementById('cheatOverlay').classList.remove('active');
+  if (examActive && !examSubmitted && !isBlocked && !clientBlocked) requestFS();
 }
 
 // ============ SUBMIT ============
 function openSubmitModal() {
   const total = soalList.length;
-  let answered = 0;
-  let unanswered = 0;
-  let flagCount = 0;
-
+  let answered = 0, unanswered = 0, flagCount = 0;
   soalList.forEach(s => {
-    const ans = jawaban[s.No] || jawaban[String(s.No)] || '';
-    if (ans.trim()) answered++;
-    else unanswered++;
+    const ans = (jawaban[s.No] || jawaban[String(s.No)] || '').toString().trim();
+    if (ans) answered++; else unanswered++;
     if (flagged[s.No]) flagCount++;
   });
 
-  document.getElementById('submitSummary').innerHTML = `
-    <div class="d-flex justify-content-center gap-4 mb-2">
-      <div><strong class="text-success">${answered}</strong><br><small>Dijawab</small></div>
-      <div><strong class="text-danger">${unanswered}</strong><br><small>Kosong</small></div>
-      <div><strong class="text-warning">${flagCount}</strong><br><small>Ditandai</small></div>
-      <div><strong>${total}</strong><br><small>Total</small></div>
-    </div>
-    ${unanswered > 0 ? '<div class="text-danger small mt-2"><i class="bi bi-exclamation-circle"></i> Masih ada soal yang belum dijawab!</div>' : ''}
-  `;
+  document.getElementById('submitSummary').innerHTML =
+    '<strong>' + answered + '</strong> dari <strong>' + total + '</strong> soal dijawab.' +
+    (unanswered > 0 ? '<br><span style="color:var(--danger)">⚠️ ' + unanswered + ' soal belum dijawab!</span>' : '') +
+    (flagCount > 0 ? '<br><span style="color:var(--warning)">🚩 ' + flagCount + ' soal ditandai ragu</span>' : '') +
+    '<br>Jawaban <strong>tidak dapat diubah</strong> setelah dikumpulkan.';
   document.getElementById('submitModal').classList.add('active');
 }
 
@@ -633,65 +762,42 @@ async function doSubmit(auto) {
   if (examSubmitted) return;
   examSubmitted = true;
   examActive = false;
-
   document.getElementById('submitModal').classList.remove('active');
   clearInterval(timerInterval);
   clearInterval(heartbeatInterval);
   showL();
 
   // ========== HITUNG BENAR, SALAH, KOSONG, SKOR ==========
-  let benar = 0;
-  let salah = 0;
-  let kosong = 0;
-  let totalSkor = 0;
+  let benar = 0, salah = 0, kosong = 0, totalSkor = 0;
   const jawabanRinci = {};
 
   soalList.forEach(soal => {
-    const noSoal = String(soal.No);
-    const jawabanSiswa = (jawaban[soal.No] || jawaban[noSoal] || '').trim();
+    const noStr = String(soal.No);
+    const jawabanSiswa = (jawaban[soal.No] || jawaban[noStr] || '').toString().trim();
     const kunci = (soal.Kunci || '').trim();
     const bobot = soal.Bobot || 1;
     const tipe = (soal.Tipe || 'PG').toUpperCase();
 
-    jawabanRinci[noSoal] = jawabanSiswa;
+    jawabanRinci[noStr] = jawabanSiswa;
 
     if (!jawabanSiswa) {
       kosong++;
     } else {
-      // Compare based on type
       let isCorrect = false;
-      if (tipe === 'PG') {
-        isCorrect = jawabanSiswa.toUpperCase() === kunci.toUpperCase();
-      } else if (tipe === 'BS') {
-        isCorrect = jawabanSiswa.toUpperCase() === kunci.toUpperCase();
-      } else if (tipe === 'IS') {
-        // Case-insensitive, trim
-        isCorrect = jawabanSiswa.toLowerCase() === kunci.toLowerCase();
-      }
+      if (tipe === 'PG') isCorrect = jawabanSiswa.toUpperCase() === kunci.toUpperCase();
+      else if (tipe === 'BS') isCorrect = jawabanSiswa.toUpperCase() === kunci.toUpperCase();
+      else if (tipe === 'IS') isCorrect = jawabanSiswa.toLowerCase() === kunci.toLowerCase();
 
-      if (isCorrect) {
-        benar++;
-        totalSkor += bobot;
-      } else {
-        salah++;
-      }
+      if (isCorrect) { benar++; totalSkor += bobot; }
+      else { salah++; }
     }
   });
 
-  console.log('[SUBMIT] Benar:', benar, 'Salah:', salah, 'Kosong:', kosong, 'Skor:', totalSkor);
-
   const payload = {
-    NIS: currentSiswa.NIS,
-    Nama: currentSiswa.Nama,
-    Sekolah: currentSiswa.Sekolah || '',
-    Mapel: currentMapel,
-    Jawaban_rinci: jawabanRinci,
-    Waktu_mulai: waktuMulai,
-    Waktu_selesai: new Date().toISOString(),
-    Skor: totalSkor,
-    Jawaban_benar: benar,
-    Jawaban_salah: salah,
-    Kosong: kosong
+    NIS: currentSiswa.NIS, Nama: currentSiswa.Nama, Sekolah: currentSiswa.Sekolah || '',
+    Mapel: currentMapel, Jawaban_rinci: jawabanRinci, Waktu_mulai: waktuMulai,
+    Waktu_selesai: new Date().toISOString(), Skor: totalSkor,
+    Jawaban_benar: benar, Jawaban_salah: salah, Kosong: kosong
   };
 
   let success = false;
@@ -700,45 +806,34 @@ async function doSubmit(auto) {
   try {
     const response = await fetch(SUPABASE_URL + '/rest/v1/HASIL', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
-        'Prefer': 'return=minimal'
-      },
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY, 'Prefer': 'return=minimal' },
       body: JSON.stringify(payload)
     });
-    if (response.ok || response.status === 201) {
-      success = true;
-    } else {
-      throw new Error('HTTP ' + response.status);
-    }
+    if (response.ok || response.status === 201) success = true;
+    else throw new Error('HTTP ' + response.status);
   } catch (fetchErr) {
-    console.warn('[SUBMIT] fetch failed, trying supabase-js:', fetchErr);
     // Method 2: Supabase JS
     try {
       const { error } = await sb.from('HASIL').insert([payload]);
       if (!error) success = true;
       else {
-        // Verify
-        const { data: check } = await sb.from('HASIL').select('id')
-          .eq('NIS', currentSiswa.NIS).eq('Mapel', currentMapel)
-          .order('id', { ascending: false }).limit(1).maybeSingle();
-        if (check) success = true;
-        else throw error;
+        const { data: check } = await sb.from('HASIL').select('id').eq('NIS', currentSiswa.NIS).eq('Mapel', currentMapel).order('id', { ascending: false }).limit(1).maybeSingle();
+        if (check) success = true; else throw error;
       }
     } catch (sbErr) { console.error('[SUBMIT] All methods failed:', sbErr); }
   }
 
   if (success) {
-    // Update status SELESAI
     try {
-      await sb.from('SISWA').update({ Status: 'SELESAI' }).eq('NIS', currentSiswa.NIS);
-    } catch (e) { console.warn('Status update failed:', e); }
+      await fetch(SUPABASE_URL + '/rest/v1/SISWA?NIS=eq.' + encodeURIComponent(currentSiswa.NIS), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY, 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ Status: 'SELESAI' })
+      });
+    } catch (e) { await sb.from('SISWA').update({ Status: 'SELESAI' }).eq('NIS', currentSiswa.NIS); }
 
     hideL();
-    clearJawabanLocal();
-    clearViolationsLocal();
+    clearJawabanLocal(); clearViolationsLocal();
     unsubscribeWarning();
     localStorage.removeItem('cbt_siswa');
     showPage('resultPage');
@@ -747,48 +842,57 @@ async function doSubmit(auto) {
   } else {
     hideL();
     toast('❌ Gagal submit. Coba lagi.', 'error');
-    examSubmitted = false;
-    examActive = true;
+    examSubmitted = false; examActive = true;
   }
 }
 
 // ============ LOCAL STORAGE ============
 function saveJawabanLocal() {
+  if (!currentSiswa || !currentMapel) return;
   try {
-    localStorage.setItem('cbt_jawaban', JSON.stringify({ mapel: currentMapel, jawaban }));
+    localStorage.setItem('cbt_jawaban_' + currentSiswa.NIS + '_' + currentMapel, JSON.stringify({
+      mapel: currentMapel, jawaban, flagged, currentIndex, sisaDetik, waktuMulai, time: Date.now()
+    }));
   } catch (e) {}
 }
 
 function loadJawabanLocal() {
+  if (!currentSiswa || !currentMapel) return null;
   try {
-    const d = localStorage.getItem('cbt_jawaban');
-    return d ? JSON.parse(d) : null;
+    const s = localStorage.getItem('cbt_jawaban_' + currentSiswa.NIS + '_' + currentMapel);
+    if (!s) return null;
+    const d = JSON.parse(s);
+    if (Date.now() - d.time > 10800000) return null; // 3 hours
+    return d;
   } catch (e) { return null; }
 }
 
 function clearJawabanLocal() {
-  try { localStorage.removeItem('cbt_jawaban'); } catch (e) {}
+  if (!currentSiswa || !currentMapel) return;
+  try { localStorage.removeItem('cbt_jawaban_' + currentSiswa.NIS + '_' + currentMapel); } catch (e) {}
 }
 
 function saveViolationsLocal() {
-  try { localStorage.setItem('cbt_violations', JSON.stringify(violations)); } catch (e) {}
+  if (!currentSiswa) return;
+  try { localStorage.setItem('v_count_' + currentSiswa.NIS, violations.toString()); } catch (e) {}
 }
 
 function loadViolationsLocal() {
-  try {
-    const d = localStorage.getItem('cbt_violations');
-    return d ? JSON.parse(d) : null;
-  } catch (e) { return null; }
+  if (!currentSiswa) return;
+  try { const c = localStorage.getItem('v_count_' + currentSiswa.NIS); if (c) violations = parseInt(c); } catch (e) {}
 }
 
 function clearViolationsLocal() {
-  try { localStorage.removeItem('cbt_violations'); } catch (e) {}
+  if (!currentSiswa) return;
+  try { localStorage.removeItem('v_count_' + currentSiswa.NIS); } catch (e) {}
 }
 
 // ============ HELPERS ============
-function esc(str) {
-  if (!str) return '';
-  const d = document.createElement('div');
-  d.textContent = str;
-  return d.innerHTML;
-}
+function esc(str) { if (!str) return ''; const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+
+// ============ NAV GUARDS ============
+history.pushState(null, null, location.href);
+window.addEventListener('popstate', () => history.pushState(null, null, location.href));
+window.addEventListener('beforeunload', e => {
+  if (currentSiswa && !examSubmitted && examActive) { e.preventDefault(); e.returnValue = 'Ujian berlangsung!'; return e.returnValue; }
+});
