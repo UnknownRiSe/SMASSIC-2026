@@ -4,303 +4,192 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>CBT SMASSIC 2026</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-<!-- KaTeX for math rendering -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
-<style>
-:root{--primary:#1a56db;--primary-light:#e8effd;--danger:#dc2626;--success:#16a34a;--warning:#f59e0b;--dark:#1e293b;--gray:#64748b;--light:#f8fafc;--radius:14px;--shadow:0 4px 24px rgba(0,0,0,.08)}
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--light);overflow-x:hidden;-webkit-user-select:none;user-select:none}
-
-/* LOADER */
-.loader-overlay{position:fixed;inset:0;background:rgba(255,255,255,.92);z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;opacity:0;pointer-events:none;transition:opacity .3s}
-.loader-overlay.active{opacity:1;pointer-events:auto}
-.loader-spinner{width:48px;height:48px;border:4px solid #e2e8f0;border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-
-/* LOGIN */
-.login-container{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f172a,#1e3a5f,#1e293b);padding:20px}
-.login-card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);width:100%;max-width:420px;overflow:hidden}
-.login-header{background:var(--dark);color:#fff;padding:32px 28px;text-align:center}
-.login-header h1{font-size:22px;font-weight:800;margin-bottom:4px}
-.login-header p{font-size:12px;opacity:.7;margin:0}
-.login-body{padding:28px}
-.form-floating{margin-bottom:16px}
-.form-floating .form-control{border-radius:10px;border:2px solid #e2e8f0;padding:20px 16px 8px;font-size:15px;transition:border-color .2s}
-.form-floating .form-control:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(26,86,219,.15)}
-.btn-login{width:100%;padding:14px;border-radius:10px;background:var(--primary);color:#fff;font-weight:700;font-size:15px;border:none;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px}
-.btn-login:hover{background:#1e40af;transform:translateY(-1px)}
-
-/* EXAM LAYOUT */
-.exam-container{display:none;height:100vh;flex-direction:column}
-.exam-container.active{display:flex}
-.exam-header{background:var(--dark);color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;z-index:100}
-.exam-header .info{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.exam-header .badge-mapel{background:rgba(255,255,255,.15);padding:5px 14px;border-radius:8px;font-size:12px;font-weight:600}
-.exam-header .student-name{font-size:13px;opacity:.8}
-.timer-box{background:var(--danger);padding:6px 16px;border-radius:8px;font-family:'Courier New',monospace;font-size:18px;font-weight:800;letter-spacing:1px;min-width:90px;text-align:center;transition:background .3s}
-.timer-box.warning{background:var(--warning);color:#000;animation:timer-pulse 1s infinite}
-.timer-box.critical{background:var(--danger);animation:timer-pulse .5s infinite}
-@keyframes timer-pulse{0%,100%{opacity:1}50%{opacity:.6}}
-
-.exam-body{flex:1;display:flex;overflow:hidden}
-
-/* SIDEBAR NAV */
-.soal-nav{width:72px;background:#fff;border-right:1px solid #e2e8f0;display:flex;flex-direction:column;overflow:hidden}
-.soal-nav-header{padding:10px 8px;text-align:center;font-size:11px;font-weight:700;color:var(--gray);border-bottom:1px solid #e2e8f0;background:#f8fafc}
-.soal-nav-list{flex:1;overflow-y:auto;padding:6px;display:flex;flex-direction:column;gap:3px}
-.soal-nav-list::-webkit-scrollbar{width:3px}
-.soal-nav-list::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:10px}
-.nav-num{width:100%;aspect-ratio:1;border:2px solid #e2e8f0;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;background:#fff;color:var(--dark)}
-.nav-num:hover{border-color:var(--primary);background:var(--primary-light)}
-.nav-num.active{background:var(--primary);color:#fff;border-color:var(--primary);transform:scale(1.05)}
-.nav-num.answered{background:#dcfce7;border-color:var(--success);color:var(--success)}
-.nav-num.answered.active{background:var(--success);color:#fff}
-.nav-num.flagged{border-color:var(--warning);position:relative}
-.nav-num.flagged::after{content:'🚩';position:absolute;top:-4px;right:-4px;font-size:10px}
-
-/* QUESTION AREA */
-.question-area{flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column}
-.question-card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);padding:28px;flex:1;display:flex;flex-direction:column}
-.question-number{display:inline-flex;align-items:center;gap:8px;margin-bottom:16px}
-.question-number .num{background:var(--primary);color:#fff;width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px}
-.question-number .tipe-badge{font-size:11px;padding:3px 10px;border-radius:6px;font-weight:600}
-.tipe-pg{background:#dbeafe;color:#1d4ed8}
-.tipe-bs{background:#fef3c7;color:#92400e}
-.tipe-is{background:#d1fae5;color:#065f46}
-.question-text{font-size:16px;line-height:1.7;color:var(--dark);margin-bottom:20px;white-space:pre-wrap;word-wrap:break-word}
-.question-text img,.question-img{max-width:100%;max-height:300px;border-radius:10px;margin:12px 0;object-fit:contain}
-
-/* OPTIONS PG */
-.options-list{display:flex;flex-direction:column;gap:10px;flex:1}
-.option-item{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border:2px solid #e2e8f0;border-radius:12px;cursor:pointer;transition:all .2s;background:#fff}
-.option-item:hover{border-color:var(--primary);background:var(--primary-light)}
-.option-item.selected{border-color:var(--primary);background:var(--primary-light);box-shadow:0 0 0 3px rgba(26,86,219,.12)}
-.option-letter{width:32px;height:32px;border-radius:8px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:var(--gray);flex-shrink:0;transition:all .2s}
-.option-item.selected .option-letter{background:var(--primary);color:#fff}
-.option-text{font-size:14px;color:var(--dark);line-height:1.5;padding-top:4px;flex:1}
-
-/* OPTIONS BS (Benar/Salah) */
-.bs-options{display:flex;gap:12px;flex-wrap:wrap}
-.bs-option{flex:1;min-width:120px;padding:16px;border:2px solid #e2e8f0;border-radius:12px;text-align:center;cursor:pointer;transition:all .2s;font-weight:700;font-size:15px}
-.bs-option:hover{border-color:var(--primary);background:var(--primary-light)}
-.bs-option.selected{border-color:var(--primary);background:var(--primary-light);box-shadow:0 0 0 3px rgba(26,86,219,.12)}
-.bs-option.selected.benar{border-color:var(--success);background:#dcfce7}
-.bs-option.selected.salah{border-color:var(--danger);background:#fef2f2}
-
-/* OPTIONS IS (Isian Singkat) */
-.isian-input{width:100%;padding:14px 16px;border:2px solid #e2e8f0;border-radius:12px;font-size:15px;transition:border-color .2s}
-.isian-input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(26,86,219,.15)}
-
-/* BOTTOM BAR */
-.bottom-bar{background:#fff;border-top:1px solid #e2e8f0;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
-.btn-nav{padding:8px 20px;border-radius:10px;font-weight:600;font-size:13px;border:2px solid #e2e8f0;background:#fff;color:var(--dark);display:flex;align-items:center;gap:6px;cursor:pointer;transition:all .2s}
-.btn-nav:hover{border-color:var(--primary);color:var(--primary)}
-.btn-nav.primary{background:var(--primary);color:#fff;border-color:var(--primary)}
-.btn-nav.primary:hover{background:#1e40af}
-.btn-nav.danger{background:var(--danger);color:#fff;border-color:var(--danger)}
-.btn-flag{padding:8px 14px;border-radius:10px;font-size:13px;border:2px solid var(--warning);background:#fff;color:var(--warning);cursor:pointer;display:flex;align-items:center;gap:4px;font-weight:600;transition:all .2s}
-.btn-flag.active{background:var(--warning);color:#fff}
-
-/* MAPEL SELECT */
-.mapel-container{display:none;min-height:100vh;padding:24px;background:linear-gradient(135deg,#0f172a,#1e3a5f);align-items:center;justify-content:center}
-.mapel-container.active{display:flex}
-.mapel-card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);width:100%;max-width:500px;padding:32px}
-.mapel-card h3{font-weight:800;margin-bottom:8px}
-.mapel-btn{width:100%;padding:16px;border-radius:12px;border:2px solid #e2e8f0;background:#fff;font-size:15px;font-weight:700;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:12px;margin-bottom:10px}
-.mapel-btn:hover{border-color:var(--primary);background:var(--primary-light);transform:translateY(-2px)}
-.mapel-btn .mapel-icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px}
-
-/* SUBMIT MODAL */
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .3s}
-.modal-overlay.active{opacity:1;pointer-events:auto}
-.modal-box{background:#fff;border-radius:var(--radius);padding:28px;width:90%;max-width:400px;text-align:center;transform:scale(.9);transition:transform .3s}
-.modal-overlay.active .modal-box{transform:scale(1)}
-
-/* WARNING POPUP */
-.warning-overlay{position:fixed;inset:0;z-index:9500;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .3s}
-.warning-overlay.active{opacity:1;pointer-events:auto}
-.warning-overlay.yellow{background:rgba(234,179,8,.25)}
-.warning-overlay.orange{background:rgba(249,115,22,.3)}
-.warning-overlay.red{background:rgba(220,38,38,.35)}
-.warning-box{background:#fff;border-radius:var(--radius);padding:32px;width:90%;max-width:420px;text-align:center;transform:scale(.85);transition:transform .3s;box-shadow:0 20px 60px rgba(0,0,0,.3)}
-.warning-overlay.active .warning-box{transform:scale(1)}
-.warning-box .warn-icon{font-size:64px;margin-bottom:12px}
-.warning-box .warn-title{font-size:20px;font-weight:800;margin-bottom:8px}
-.warning-box .warn-msg{font-size:14px;color:var(--gray);margin-bottom:20px;line-height:1.6}
-.warning-box .warn-border{border:3px solid transparent;border-radius:12px;padding:4px}
-.warning-overlay.yellow .warn-border{border-color:#eab308}
-.warning-overlay.orange .warn-border{border-color:#f97316}
-.warning-overlay.red .warn-border{border-color:#dc2626}
-
-/* RESULT PAGE */
-.result-container{display:none;min-height:100vh;padding:24px;background:linear-gradient(135deg,#0f172a,#1e3a5f);align-items:center;justify-content:center}
-.result-container.active{display:flex}
-.result-card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);width:100%;max-width:500px;padding:36px;text-align:center}
-
-/* TOAST */
-.toast-wrap{position:fixed;top:16px;right:16px;z-index:10000;display:flex;flex-direction:column;gap:8px}
-.toast-msg{padding:12px 20px;border-radius:10px;color:#fff;font-size:13px;font-weight:600;animation:toast-in .3s ease;box-shadow:0 4px 20px rgba(0,0,0,.15);display:flex;align-items:center;gap:8px;max-width:350px}
-.toast-msg.success{background:var(--success)}
-.toast-msg.error{background:var(--danger)}
-.toast-msg.warning{background:var(--warning);color:#000}
-.toast-msg.info{background:var(--primary)}
-@keyframes toast-in{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
-
-/* KATEX */
-.katex{font-size:1em !important}
-.question-text .katex-display{margin:12px 0}
-.option-text .katex{font-size:.95em !important}
-
-/* RESPONSIVE */
-@media(max-width:640px){
-  .soal-nav{width:56px}
-  .nav-num{font-size:11px;border-radius:8px}
-  .question-area{padding:12px}
-  .question-card{padding:16px}
-  .question-text{font-size:14px}
-  .option-item{padding:10px 12px}
-  .exam-header{padding:8px 12px}
-  .timer-box{font-size:15px;padding:5px 12px}
-}
-</style>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
 <!-- LOADER -->
-<div class="loader-overlay" id="loader"><div class="loader-spinner"></div><div style="font-size:13px;color:var(--gray)">Memuat...</div></div>
+<div class="loader-overlay" id="loader">
+  <div class="loader-spinner"></div>
+  <div class="loader-text">Memproses...</div>
+</div>
 
 <!-- TOAST -->
 <div class="toast-wrap" id="toastWrap"></div>
 
-<!-- WARNING POPUP -->
+<!-- WARNING POPUP from Pengawas -->
 <div class="warning-overlay" id="warningOverlay">
   <div class="warning-box">
     <div class="warn-border">
       <div class="warn-icon" id="warnIcon">⚠️</div>
       <div class="warn-title" id="warnTitle">PERINGATAN</div>
       <div class="warn-msg" id="warnMsg">Anda mendapat peringatan dari pengawas.</div>
-      <button class="btn-login" onclick="dismissWarning()" style="background:var(--dark)">
-        <i class="bi bi-check-lg"></i> Saya Mengerti
+      <button class="btn-main" onclick="dismissWarning()" style="background:var(--dark);margin-top:16px">
+        ✅ Saya Mengerti
       </button>
     </div>
   </div>
 </div>
 
-<!-- LOGIN PAGE -->
-<div class="login-container" id="loginPage">
+<!-- CHEAT OVERLAY -->
+<div class="cheat-overlay" id="cheatOverlay">
+  <div class="cheat-icon">⚠️</div>
+  <h2>Pelanggaran Terdeteksi!</h2>
+  <p id="cheatMsg">Tindakan Anda telah dicatat.</p>
+  <div class="cheat-count" id="cheatCount">Pelanggaran ke-1</div>
+  <button class="btn-main" onclick="dismissCheat()" style="background:#fff;color:var(--danger);margin-top:20px">
+    Kembali ke Ujian
+  </button>
+</div>
+
+<!-- BLOCKED OVERLAY -->
+<div class="blocked-overlay" id="blockedOverlay">
+  <div style="font-size:100px;margin-bottom:16px">🚫</div>
+  <h2>AKUN DIBLOKIR</h2>
+  <p>Anda telah melakukan terlalu banyak pelanggaran.<br>Hubungi pengawas ujian.</p>
+  <button class="btn-main" onclick="recheckBlock()" style="background:#fff;color:#b71c1c;margin-top:20px" id="recheckBlockBtn">
+    🔄 Cek Ulang Status
+  </button>
+  <p id="recheckInfo" style="margin-top:8px;font-size:12px;opacity:.7"></p>
+</div>
+
+<!-- KICKED OVERLAY -->
+<div class="kicked-overlay" id="kickedOverlay">
+  <div style="font-size:80px;margin-bottom:16px">🚪</div>
+  <h2>Anda Dikeluarkan dari Ujian</h2>
+  <p>Pengawas telah mengeluarkan Anda. Hubungi pengawas.</p>
+  <button class="btn-main" onclick="recheckKick()" style="background:#fff;color:var(--dark);margin-top:20px" id="recheckKickBtn">
+    🔄 Cek Ulang Status
+  </button>
+  <p id="recheckKickInfo" style="margin-top:8px;font-size:12px;opacity:.7"></p>
+</div>
+
+<!-- ==================== LOGIN PAGE ==================== -->
+<div class="page login-page" id="loginPage">
   <div class="login-card">
     <div class="login-header">
-      <div style="font-size:42px;margin-bottom:8px">📝</div>
+      <div class="login-logo">📝</div>
       <h1>CBT SMASSIC 2026</h1>
       <p>Computer Based Test — SMAN 1 Batu</p>
     </div>
     <div class="login-body">
-      <div id="loginAlert" class="alert alert-danger d-none py-2 small" role="alert"></div>
-      <form onsubmit="return doLogin(event)">
-        <div class="form-floating">
-          <input type="text" class="form-control" id="inputNIS" placeholder="NIS" required autocomplete="off">
-          <label><i class="bi bi-person-badge"></i> NIS</label>
+      <div class="login-alert" id="loginAlert"></div>
+      <div class="form-group">
+        <label>NIS</label>
+        <input type="text" id="inputNIS" placeholder="Masukkan NIS" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <div class="password-wrap">
+          <input type="password" id="inputPassword" placeholder="Masukkan Password" autocomplete="off">
+          <button type="button" class="toggle-pw" onclick="togglePw()">👁️</button>
         </div>
-        <div class="form-floating">
-          <input type="text" class="form-control" id="inputNama" placeholder="Nama Lengkap" required autocomplete="off">
-          <label><i class="bi bi-person"></i> Nama Lengkap</label>
-        </div>
-        <button type="submit" class="btn-login" id="btnLogin">
-          <i class="bi bi-box-arrow-in-right"></i> Masuk Ujian
-        </button>
-      </form>
-      <div class="text-center mt-3" style="font-size:11px;color:var(--gray)">
-        ⚠️ Kecurangan akan terdeteksi otomatis dan dilaporkan real-time
+      </div>
+      <button class="btn-main" id="btnLogin" onclick="doLogin()">
+        🔐 Masuk Ujian
+      </button>
+      <div class="login-footer">
+        ⚠️ Kecurangan terdeteksi otomatis & dilaporkan real-time
       </div>
     </div>
   </div>
 </div>
 
-<!-- MAPEL SELECT -->
-<div class="mapel-container" id="mapelPage">
+<!-- ==================== MAPEL PAGE ==================== -->
+<div class="page mapel-page" id="mapelPage" style="display:none">
   <div class="mapel-card">
-    <div class="text-center mb-3">
-      <div style="font-size:36px">📚</div>
-      <h3>Pilih Mata Pelajaran</h3>
-      <p class="text-muted small" id="mapelWelcome">Selamat datang, Siswa</p>
+    <div style="text-align:center;margin-bottom:20px">
+      <div style="font-size:42px">📚</div>
+      <h2 id="mapelWelcome">Selamat Datang</h2>
+      <p class="text-muted">Pilih mata pelajaran untuk memulai ujian</p>
     </div>
     <div id="mapelButtons"></div>
-    <button class="mapel-btn" onclick="doLogout()" style="border-color:var(--danger);color:var(--danger);justify-content:center;margin-top:16px">
-      <i class="bi bi-box-arrow-left"></i> Logout
+    <button class="mapel-btn logout-btn" onclick="doLogout()">
+      <span>🚪 Logout</span>
     </button>
   </div>
 </div>
 
-<!-- EXAM -->
-<div class="exam-container" id="examPage">
+<!-- ==================== EXAM PAGE ==================== -->
+<div class="page exam-page" id="examPage" style="display:none">
+  <!-- Header -->
   <div class="exam-header">
-    <div class="info">
-      <span class="badge-mapel" id="examMapelBadge">Mapel</span>
-      <span class="student-name" id="examStudentName">Nama</span>
+    <div class="exam-header-left">
+      <button class="nav-toggle" onclick="toggleNavPanel()">☰</button>
+      <span class="header-mapel" id="examMapelBadge">Mapel</span>
+      <span class="header-name" id="examStudentName">Nama</span>
     </div>
-    <div class="d-flex align-items-center gap-2">
-      <span style="font-size:11px;opacity:.6" id="examProgress">0/0</span>
+    <div class="exam-header-right">
+      <div class="violation-badge clean" id="violationBadge">✅ Bersih</div>
       <div class="timer-box" id="timerBox">00:00:00</div>
     </div>
   </div>
+
+  <!-- Body -->
   <div class="exam-body">
-    <div class="soal-nav">
-      <div class="soal-nav-header">SOAL</div>
-      <div class="soal-nav-list" id="soalNavList"></div>
+    <!-- Sidebar Nav -->
+    <div class="soal-sidebar" id="soalSidebar">
+      <div class="sidebar-title">Navigasi Soal</div>
+      <div class="soal-grid" id="soalGrid"></div>
+      <div class="sidebar-stats">
+        <div class="stat-row"><span>Dijawab</span><span class="stat-val text-success" id="stAnswered">0</span></div>
+        <div class="stat-row"><span>Belum</span><span class="stat-val text-danger" id="stUnanswered">0</span></div>
+        <div class="stat-row"><span>Ditandai</span><span class="stat-val text-warning" id="stFlagged">0</span></div>
+      </div>
+      <button class="btn-main submit-sidebar-btn" onclick="openSubmitModal()">
+        📤 Kumpulkan Jawaban
+      </button>
     </div>
+
+    <!-- Question Area -->
     <div class="question-area" id="questionArea">
       <div class="question-card" id="questionCard">
-        <div class="text-center text-muted py-5">Memuat soal...</div>
+        <div class="text-center text-muted" style="padding:60px 20px">Memuat soal...</div>
       </div>
-    </div>
-  </div>
-  <div class="bottom-bar">
-    <div class="d-flex gap-2">
-      <button class="btn-nav" onclick="prevSoal()"><i class="bi bi-chevron-left"></i> Prev</button>
-      <button class="btn-nav" onclick="nextSoal()">Next <i class="bi bi-chevron-right"></i></button>
-    </div>
-    <div class="d-flex gap-2">
-      <button class="btn-flag" id="btnFlag" onclick="toggleFlag()"><i class="bi bi-flag"></i> Ragu</button>
-      <button class="btn-nav danger" onclick="openSubmitModal()"><i class="bi bi-send"></i> Submit</button>
+      <!-- Bottom Nav -->
+      <div class="question-nav">
+        <button class="btn-nav" id="btnPrev" onclick="prevSoal()">← Sebelumnya</button>
+        <button class="btn-flag" id="btnFlag" onclick="toggleFlag()">🚩 Tandai</button>
+        <button class="btn-nav" id="btnNext" onclick="nextSoal()">Selanjutnya →</button>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- SUBMIT MODAL -->
+<!-- ==================== SUBMIT MODAL ==================== -->
 <div class="modal-overlay" id="submitModal">
   <div class="modal-box">
     <div style="font-size:48px;margin-bottom:8px">📤</div>
-    <h4 style="font-weight:800;margin-bottom:8px">Kumpulkan Jawaban?</h4>
-    <div id="submitSummary" class="text-muted small mb-3"></div>
-    <div class="d-flex gap-2 justify-content-center">
-      <button class="btn-nav" onclick="closeSubmitModal()">Kembali</button>
-      <button class="btn-nav primary" onclick="doSubmit(false)"><i class="bi bi-send-fill"></i> Ya, Kumpulkan</button>
+    <h3>Kumpulkan Jawaban?</h3>
+    <p id="submitSummary" class="text-muted"></p>
+    <div class="modal-actions">
+      <button class="btn-nav" onclick="closeSubmitModal()">Batal</button>
+      <button class="btn-main" onclick="doSubmit(false)">✅ Ya, Kumpulkan</button>
     </div>
   </div>
 </div>
 
-<!-- RESULT PAGE -->
-<div class="result-container" id="resultPage">
+<!-- ==================== RESULT PAGE ==================== -->
+<div class="page result-page" id="resultPage" style="display:none">
   <div class="result-card">
-    <div style="font-size:56px;margin-bottom:12px">✅</div>
-    <h3 style="font-weight:800;margin-bottom:8px">Ujian Selesai!</h3>
-    <p class="text-muted">Jawaban Anda telah berhasil dikumpulkan.</p>
-    <div class="mt-3 p-3 rounded" style="background:#f0fdf4;border:1px solid #bbf7d0">
-      <div style="font-size:13px;color:var(--success);font-weight:600">
-        <i class="bi bi-check-circle-fill"></i> Data tersimpan di server
-      </div>
-    </div>
-    <button class="btn-login mt-4" onclick="backToLogin()" style="background:var(--dark)">
-      <i class="bi bi-house"></i> Kembali
-    </button>
+    <div style="font-size:64px;margin-bottom:12px">🎉</div>
+    <h2>Jawaban Berhasil Dikumpulkan!</h2>
+    <p class="text-muted">Terima kasih telah mengerjakan ujian.<br>Jawaban Anda telah tersimpan dengan aman.</p>
+    <div class="done-badge">✅ Selesai</div>
+    <p style="margin-top:16px;font-size:12px;color:#999">Anda dapat menutup halaman ini.</p>
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- IMAGE ZOOM -->
+<div class="img-zoom" id="imgZoom" onclick="this.classList.remove('active')">
+  <img id="zoomImg" src="">
+  <div class="zoom-close" onclick="event.stopPropagation();document.getElementById('imgZoom').classList.remove('active')">✕</div>
+</div>
+
 <script src="script.js"></script>
 </body>
 </html>
