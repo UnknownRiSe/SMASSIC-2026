@@ -182,12 +182,15 @@ async function startExam(mapel) {
   currentMapel = mapel; showL();
   try {
     const { data, error } = await sb.from('SOAL')
-      .select('No, Soal, Opsi_A, Opsi_B, Opsi_C, Opsi_D, Opsi_E, Gambar, Mapel')
+      .select('No, Soal, Opsi_A, Opsi_B, Opsi_C, Opsi_D, Opsi_E, Kunci, Bobot, Gambar, Mapel')
       .eq('Mapel', mapel).order('No', { ascending: true });
     hideL();
     if (error || !data || !data.length) { toast('Soal tidak ditemukan', 'error'); return; }
     const shuffled = [...data];
-    for (let j = shuffled.length - 1; j > 0; j--) { const k = Math.floor(Math.random() * (j + 1)); [shuffled[j], shuffled[k]] = [shuffled[k], shuffled[j]]; }
+    for (let j = shuffled.length - 1; j > 0; j--) { 
+      const k = Math.floor(Math.random() * (j + 1)); 
+      [shuffled[j], shuffled[k]] = [shuffled[k], shuffled[j]]; 
+    }
     initExam(mapel, shuffled, DEFAULT_DURASI);
   } catch (e) { hideL(); toast('Gagal: ' + e.message, 'error'); }
 }
@@ -339,11 +342,37 @@ async function doSubmit(auto) {
   clearInterval(heartbeatInterval);
   showL();
 
-  // Build jawaban object
+  // ========== HITUNG BENAR, SALAH, KOSONG, SKOR ==========
+  let benar = 0;
+  let salah = 0;
+  let kosong = 0;
+  let totalSkor = 0;
+
   const jawabanRinci = {};
-  for (const noSoal in jawaban) {
-    jawabanRinci[String(noSoal)] = jawaban[noSoal];
-  }
+
+  soalList.forEach(soal => {
+    const noSoal = String(soal.No);
+    const jawabanSiswa = jawaban[soal.No] || jawaban[noSoal] || null;
+    const kunci = (soal.Kunci || '').trim().toUpperCase();
+    const bobot = soal.Bobot || 1;
+
+    // Simpan jawaban rinci
+    jawabanRinci[noSoal] = jawabanSiswa || '';
+
+    if (!jawabanSiswa || jawabanSiswa.trim() === '') {
+      // Tidak dijawab
+      kosong++;
+    } else if (jawabanSiswa.trim().toUpperCase() === kunci) {
+      // Benar
+      benar++;
+      totalSkor += bobot;
+    } else {
+      // Salah
+      salah++;
+    }
+  });
+
+  console.log('[SUBMIT] Benar:', benar, 'Salah:', salah, 'Kosong:', kosong, 'Skor:', totalSkor);
 
   const payload = {
     NIS: currentSiswa.NIS,
@@ -353,16 +382,16 @@ async function doSubmit(auto) {
     Jawaban_rinci: jawabanRinci,
     Waktu_mulai: waktuMulai,
     Waktu_selesai: new Date().toISOString(),
-    Skor: 0,
-    Jawaban_benar: 0,
-    Jawaban_salah: 0
+    Skor: totalSkor,
+    Jawaban_benar: benar,
+    Jawaban_salah: salah,
+    Kosong: kosong
   };
 
   console.log('[SUBMIT] Payload:', JSON.stringify(payload, null, 2));
 
-  // ⭐ METHOD 1: Direct fetch (bypass supabase-js parser issue)
+  // METHOD 1: Direct fetch
   let success = false;
-
   try {
     const response = await fetch(SUPABASE_URL + '/rest/v1/HASIL', {
       method: 'POST',
@@ -379,7 +408,7 @@ async function doSubmit(auto) {
 
     if (response.ok || response.status === 201) {
       success = true;
-      console.log('[SUBMIT] ✅ Insert via fetch OK');
+      console.log('[SUBMIT] Insert via fetch OK');
     } else {
       const errText = await response.text();
       console.error('[SUBMIT] fetch error body:', errText);
@@ -388,14 +417,13 @@ async function doSubmit(auto) {
   } catch (fetchErr) {
     console.error('[SUBMIT] fetch failed:', fetchErr);
 
-    // ⭐ METHOD 2: Fallback using supabase-js without .select()
+    // METHOD 2: Fallback using supabase-js
     try {
       console.log('[SUBMIT] Trying supabase-js fallback...');
       const { error } = await sb.from('HASIL').insert([payload]);
 
       if (error) {
         console.error('[SUBMIT] sb insert error:', error);
-        // Check if it's just the response parsing error but data was inserted
         const { data: checkData } = await sb.from('HASIL')
           .select('id')
           .eq('NIS', currentSiswa.NIS)
@@ -405,14 +433,14 @@ async function doSubmit(auto) {
           .single();
 
         if (checkData) {
-          console.log('[SUBMIT] ✅ Data confirmed in DB despite error');
+          console.log('[SUBMIT] Data confirmed in DB despite error');
           success = true;
         } else {
           throw error;
         }
       } else {
         success = true;
-        console.log('[SUBMIT] ✅ sb insert OK');
+        console.log('[SUBMIT] sb insert OK');
       }
     } catch (sbErr) {
       console.error('[SUBMIT] All methods failed:', sbErr);
@@ -420,7 +448,6 @@ async function doSubmit(auto) {
   }
 
   if (success) {
-    // Update status
     try {
       await fetch(SUPABASE_URL + '/rest/v1/SISWA?NIS=eq.' + encodeURIComponent(currentSiswa.NIS), {
         method: 'PATCH',
@@ -433,7 +460,6 @@ async function doSubmit(auto) {
         body: JSON.stringify({ Status: 'SELESAI' })
       });
     } catch (e) {
-      // Fallback
       await sb.from('SISWA').update({ Status: 'SELESAI' }).eq('NIS', currentSiswa.NIS);
     }
 
@@ -550,4 +576,5 @@ window.addEventListener('beforeunload', e => {
 
 // ============ INIT ============
 showPage('loginPage');
+
 
