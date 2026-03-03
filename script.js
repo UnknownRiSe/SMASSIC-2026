@@ -1,8 +1,8 @@
 // ============================================================
 // CBT SMASSIC 2026 — SISWA CLIENT (NIS + PASSWORD LOGIN)
-// Multi-type soal, LaTeX math, Server timer, Warning system
+// Anti-cheat: Split screen, floating window, AI, Screenshot
+// Fixed: Image zoom, cursor sensitivity, enhanced security
 // ============================================================
-
 const SUPABASE_URL = 'https://wwchdqtqakpbjswkavnm.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_rwPcbkV7Y6Fi1AKCET40Yg_ae7HGaZr';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -28,8 +28,18 @@ let sisaDetik = 0;
 let acListenersAttached = false;
 const DEFAULT_DURASI = 90;
 
+// Anti-cheat state
+let windowSizeCheckInterval = null;
+let lastWindowWidth = 0;
+let lastWindowHeight = 0;
+let focusLostCount = 0;
+let mouseLeaveCount = 0;
+let lastMouseLeaveTime = 0;
+let resizeDebounce = null;
+let isZoomingImage = false; // Flag to prevent false positives during zoom
+
 const MAPEL_LIST = [
-  { nama: 'Matematika', icon: '🔢', color: '#3b82f6' },
+  { nama: 'Matematika', icon: '📐', color: '#3b82f6' },
   { nama: 'IPA', icon: '🔬', color: '#10b981' },
   { nama: 'IPS', icon: '🌍', color: '#f59e0b' }
 ];
@@ -37,8 +47,6 @@ const MAPEL_LIST = [
 // ============ INIT ============
 document.addEventListener('DOMContentLoaded', () => {
   showPage('loginPage');
-
-  // Try restore session
   try {
     const saved = localStorage.getItem('cbt_siswa');
     if (saved) {
@@ -50,7 +58,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   } catch (e) { showPage('loginPage'); }
 
-  // Enter key handlers
   document.getElementById('inputNIS').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('inputPassword').focus(); });
   document.getElementById('inputPassword').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 });
@@ -77,7 +84,7 @@ function renderMath(el) {
 // ============ PAGES ============
 function showPage(id) {
   ['loginPage', 'mapelPage', 'examPage', 'resultPage'].forEach(p => {
-    document.getElementById(p).style.display = (p === id) ? (p === 'examPage' ? 'flex' : 'flex') : 'none';
+    document.getElementById(p).style.display = (p === id) ? 'flex' : 'none';
   });
   if (id !== 'examPage') examActive = false;
 }
@@ -149,12 +156,10 @@ async function doLogin() {
       return;
     }
 
-    // Update status to ONLINE
     await sb.from('SISWA').update({ Status: 'ONLINE', Last_Heartbeat: new Date().toISOString() }).eq('NIS', nis);
 
     currentSiswa = { NIS: data.NIS, Nama: data.Nama, Sekolah: data.Sekolah || '' };
     localStorage.setItem('cbt_siswa', JSON.stringify(currentSiswa));
-
     violations = 0;
     clientBlocked = false;
     isBlocked = false;
@@ -163,7 +168,6 @@ async function doLogin() {
     toast('Login berhasil! Selamat datang, ' + data.Nama, 'success');
     showPage('mapelPage');
     renderMapelButtons();
-
   } catch (e) {
     hideL();
     document.getElementById('btnLogin').disabled = false;
@@ -188,7 +192,7 @@ function doLogout() {
 async function recheckBlock() {
   if (!currentSiswa) { location.reload(); return; }
   const btn = document.getElementById('recheckBlockBtn');
-  btn.disabled = true; btn.textContent = '⏳ Mengecek...';
+  btn.disabled = true; btn.textContent = '🔄 Mengecek...';
   try {
     const { data } = await sb.from('SISWA').select('Status').eq('NIS', currentSiswa.NIS).maybeSingle();
     btn.disabled = false; btn.textContent = '🔄 Cek Ulang Status';
@@ -208,7 +212,7 @@ async function recheckBlock() {
 async function recheckKick() {
   if (!currentSiswa) { location.reload(); return; }
   const btn = document.getElementById('recheckKickBtn');
-  btn.disabled = true; btn.textContent = '⏳ Mengecek...';
+  btn.disabled = true; btn.textContent = '🔄 Mengecek...';
   try {
     const { data } = await sb.from('SISWA').select('Status').eq('NIS', currentSiswa.NIS).maybeSingle();
     btn.disabled = false; btn.textContent = '🔄 Cek Ulang Status';
@@ -229,8 +233,10 @@ async function recheckKick() {
 function fullResetState() {
   examActive = false; examSubmitted = false; isBlocked = false; clientBlocked = false;
   violations = 0; currentMapel = ''; soalList = []; jawaban = {}; flagged = {}; currentIndex = 0;
+  focusLostCount = 0; mouseLeaveCount = 0;
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
   if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
+  if (windowSizeCheckInterval) { clearInterval(windowSizeCheckInterval); windowSizeCheckInterval = null; }
   try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
   if (currentSiswa) clearViolationsLocal();
   document.getElementById('blockedOverlay').classList.remove('active');
@@ -260,14 +266,12 @@ async function startExam(mapel) {
   currentMapel = mapel;
   showL();
   try {
-    // 1. Check pengaturan
     let durasi = DEFAULT_DURASI * 60;
     let shouldShuffle = true;
     try {
       const { data: peng } = await sb.from('PENGATURAN')
         .select('Durasi_menit, Status_ujian, Waktu_mulai, Waktu_selesai, Acak_soal')
         .eq('Mapel', mapel).maybeSingle();
-
       if (peng) {
         if (peng.Status_ujian === 'SELESAI') { hideL(); toast('Ujian ' + mapel + ' sudah berakhir.', 'error'); return; }
         if (peng.Status_ujian === 'BELUM') { hideL(); toast('Ujian ' + mapel + ' belum dimulai. Tunggu pengawas.', 'warning'); return; }
@@ -283,11 +287,9 @@ async function startExam(mapel) {
       }
     } catch (e) { console.warn('Pengaturan not found, using defaults'); }
 
-    // 2. Check existing result
     const { data: existing } = await sb.from('HASIL').select('id').eq('NIS', currentSiswa.NIS).eq('Mapel', mapel).maybeSingle();
     if (existing) { hideL(); toast('Anda sudah mengerjakan ujian ' + mapel, 'warning'); return; }
 
-    // 3. Load soal (include Kunci, Bobot, Tipe)
     const { data: soalRaw, error: soalErr } = await sb.from('SOAL')
       .select('No, Soal, Opsi_A, Opsi_B, Opsi_C, Opsi_D, Opsi_E, Kunci, Bobot, Tipe, Gambar, Mapel')
       .eq('Mapel', mapel).order('No', { ascending: true });
@@ -301,7 +303,6 @@ async function startExam(mapel) {
         [finalSoal[j], finalSoal[k]] = [finalSoal[k], finalSoal[j]];
       }
     }
-
     hideL();
     initExam(mapel, finalSoal, durasi);
   } catch (e) { hideL(); toast('Gagal: ' + e.message, 'error'); }
@@ -313,17 +314,14 @@ function initExam(mapel, soal, durasiDetik) {
   examSubmitted = false;
   isBlocked = false;
   clientBlocked = false;
-
   if (violations >= 3) { showBlocked(); return; }
 
-  // Restore saved answers
   const saved = loadJawabanLocal();
   if (saved && saved.mapel === mapel) {
     jawaban = saved.jawaban || {};
     flagged = saved.flagged || {};
     currentIndex = saved.currentIndex || 0;
     waktuMulai = saved.waktuMulai || new Date().toISOString();
-    // Adjust remaining time if saved
     if (saved.sisaDetik && saved.time) {
       const elapsed = Math.floor((Date.now() - saved.time) / 1000);
       sisaDetik = Math.max(0, saved.sisaDetik - elapsed);
@@ -339,12 +337,11 @@ function initExam(mapel, soal, durasiDetik) {
     sisaDetik = durasiDetik;
   }
 
-  // UI
   document.getElementById('examMapelBadge').textContent = mapel;
   document.getElementById('examStudentName').textContent = currentSiswa.Nama + ' (' + currentSiswa.NIS + ')';
 
   showPage('examPage');
-  examActive = false; // will be set after delay
+  examActive = false;
 
   buildGrid();
   renderSoal(currentIndex);
@@ -354,16 +351,68 @@ function initExam(mapel, soal, durasiDetik) {
 
   if (!acListenersAttached) { setupAntiCheat(); acListenersAttached = true; }
 
+  // Start split-screen / floating window detection
+  startWindowSizeMonitor();
+
   sb.from('SISWA').update({ Status: 'ONLINE' }).eq('NIS', currentSiswa.NIS).then(() => {});
+
   requestFS();
 
-  setTimeout(() => { if (!examSubmitted && !isBlocked && !clientBlocked) examActive = true; }, 3000);
+  // Record initial window size after fullscreen
+  setTimeout(() => {
+    lastWindowWidth = window.innerWidth;
+    lastWindowHeight = window.innerHeight;
+    if (!examSubmitted && !isBlocked && !clientBlocked) examActive = true;
+  }, 3000);
 
   if (sisaDetik <= 0) { toast('Waktu habis!', 'warning'); doSubmit(true); }
 }
 
 function requestFS() {
-  try { const el = document.documentElement; if (el.requestFullscreen) el.requestFullscreen(); else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen(); } catch (e) {}
+  try {
+    const el = document.documentElement;
+    if (el.requestFullscreen) el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  } catch (e) {}
+}
+
+// ============ SPLIT SCREEN & FLOATING WINDOW DETECTION ============
+function startWindowSizeMonitor() {
+  if (windowSizeCheckInterval) clearInterval(windowSizeCheckInterval);
+
+  windowSizeCheckInterval = setInterval(() => {
+    if (!examActive || examSubmitted || isBlocked || clientBlocked || isZoomingImage) return;
+
+    const sw = screen.width;
+    const sh = screen.height;
+    const ww = window.innerWidth;
+    const wh = window.innerHeight;
+
+    // Detect split screen: window is significantly smaller than screen
+    // Allow some tolerance for taskbar, browser chrome, etc.
+    const widthRatio = ww / sw;
+    const heightRatio = wh / sh;
+
+    // Split screen typically makes window ~50% or less of screen width/height
+    // Use threshold of 70% to catch split screen but not minor variations
+    const isSplitHorizontal = widthRatio < 0.68 && sw > 500;
+    const isSplitVertical = heightRatio < 0.68 && sh > 500;
+
+    // Detect floating/PiP window: window much smaller than screen
+    const isFloating = (widthRatio < 0.5 && heightRatio < 0.7) || (widthRatio < 0.7 && heightRatio < 0.5);
+
+    // Check if NOT in fullscreen (additional signal)
+    const notFullscreen = !document.fullscreenElement && !document.webkitFullscreenElement;
+
+    if (notFullscreen && (isSplitHorizontal || isSplitVertical)) {
+      reportCheat('Layar Belah', `Split screen terdeteksi (${Math.round(widthRatio*100)}%x${Math.round(heightRatio*100)}%)`);
+      // Try to re-enter fullscreen
+      setTimeout(() => { if (examActive && !examSubmitted && !isBlocked && !clientBlocked) requestFS(); }, 1000);
+    } else if (notFullscreen && isFloating) {
+      reportCheat('Layar Mengambang', `Floating window terdeteksi (${ww}x${wh} vs ${sw}x${sh})`);
+      setTimeout(() => { if (examActive && !examSubmitted && !isBlocked && !clientBlocked) requestFS(); }, 1000);
+    }
+  }, 3000); // Check every 3 seconds
 }
 
 // ============ GRID ============
@@ -390,7 +439,6 @@ function updateGrid() {
   document.getElementById('stUnanswered').textContent = unanswered;
   document.getElementById('stFlagged').textContent = flagCount;
 
-  // Violation badge
   const vb = document.getElementById('violationBadge');
   if (violations > 0) { vb.className = 'violation-badge warn'; vb.textContent = '⚠️ ' + violations + '/3'; }
   else { vb.className = 'violation-badge clean'; vb.textContent = '✅ Bersih'; }
@@ -405,21 +453,21 @@ function renderSoal(index) {
   const currentAnswer = (jawaban[s.No] || jawaban[String(s.No)] || '').toString();
   const card = document.getElementById('questionCard');
 
-  // Tipe badge
   const tipeBadges = { PG: ['Pilihan Ganda', 'tipe-pg'], BS: ['Benar / Salah', 'tipe-bs'], IS: ['Isian Singkat', 'tipe-is'] };
   const [tipeLabel, tipeClass] = tipeBadges[tipe] || tipeBadges.PG;
 
-  // Image
+  // Image - FIXED: use button with proper event handling
   let imgHtml = '';
   if (s.Gambar && s.Gambar.trim()) {
+    const imgSrc = s.Gambar.trim();
     imgHtml = `<div class="question-img-wrap">
-      <img src="${esc(s.Gambar)}" alt="Gambar soal" onclick="zoomImg('${esc(s.Gambar)}')" onerror="this.parentElement.innerHTML='<div style=\\'color:var(--danger);padding:12px\\'>⚠️ Gambar gagal dimuat</div>'">
-      <div class="img-hint">Klik untuk memperbesar</div>
+      <img src="${esc(imgSrc)}" alt="Gambar soal" class="question-img" data-src="${esc(imgSrc)}"
+        onerror="this.parentElement.innerHTML='<div style=\\'color:var(--danger);padding:12px\\'>⚠️ Gambar gagal dimuat</div>'">
+      <button type="button" class="img-zoom-btn" data-src="${esc(imgSrc)}">🔍 Klik untuk memperbesar</button>
     </div>`;
   }
 
   let optionsHtml = '';
-
   if (tipe === 'PG') {
     const options = [];
     if (s.Opsi_A) options.push({ key: 'A', text: s.Opsi_A });
@@ -433,7 +481,6 @@ function renderSoal(index) {
         <div class="option-text">${esc(o.text)}</div>
       </div>
     `).join('')}</div>`;
-
   } else if (tipe === 'BS') {
     optionsHtml = `<div class="bs-options">
       <div class="bs-option${currentAnswer.toUpperCase() === 'BENAR' ? ' selected' : ''}" onclick="selectAnswer('${s.No}','Benar')">
@@ -443,7 +490,6 @@ function renderSoal(index) {
         <div class="bs-icon">❌</div> Salah
       </div>
     </div>`;
-
   } else if (tipe === 'IS') {
     optionsHtml = `<div class="isian-group">
       <div class="isian-label">Ketik jawaban Anda:</div>
@@ -453,7 +499,6 @@ function renderSoal(index) {
     </div>`;
   }
 
-  // Build card
   card.innerHTML = `
     <div class="question-header">
       <div class="question-num-wrap">
@@ -470,17 +515,35 @@ function renderSoal(index) {
     ${optionsHtml}
   `;
 
-  // Render math
+  // Attach image zoom event listeners AFTER innerHTML is set
   setTimeout(() => {
     renderMath(document.getElementById('qText'));
     document.querySelectorAll('.option-text').forEach(el => renderMath(el));
+
+    // Bind zoom button click
+    const zoomBtn = card.querySelector('.img-zoom-btn');
+    if (zoomBtn) {
+      zoomBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        zoomImg(this.getAttribute('data-src'));
+      });
+    }
+    // Also bind image click
+    const imgEl = card.querySelector('.question-img');
+    if (imgEl) {
+      imgEl.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        zoomImg(this.getAttribute('data-src'));
+      });
+    }
   }, 50);
 
   updateGrid();
   updateFlagButton();
   updateNavButtons();
 
-  // Focus isian input
   if (tipe === 'IS') {
     setTimeout(() => { const inp = document.getElementById('isianInput'); if (inp) inp.focus(); }, 100);
   }
@@ -497,7 +560,6 @@ function selectAnswer(no, val) {
 // ============ NAVIGATION ============
 function goToSoal(i) {
   renderSoal(i);
-  // Close mobile sidebar
   document.getElementById('soalSidebar').classList.remove('show');
 }
 function prevSoal() { if (currentIndex > 0) { renderSoal(currentIndex - 1); saveJawabanLocal(); } }
@@ -539,9 +601,28 @@ function toggleNavPanel() {
   document.getElementById('soalSidebar').classList.toggle('show');
 }
 
+// ============ IMAGE ZOOM - FIXED ============
 function zoomImg(src) {
-  document.getElementById('zoomImg').src = src;
-  document.getElementById('imgZoom').classList.add('active');
+  if (!src) return;
+  isZoomingImage = true; // Prevent false anti-cheat triggers
+  const zoomEl = document.getElementById('imgZoom');
+  const zoomImgEl = document.getElementById('zoomImg');
+  zoomImgEl.src = src;
+  zoomEl.classList.add('active');
+
+  // Prevent anti-cheat during zoom
+  setTimeout(() => {
+    // Will be reset when zoom closes
+  }, 100);
+}
+
+function closeZoom() {
+  const zoomEl = document.getElementById('imgZoom');
+  zoomEl.classList.remove('active');
+  // Small delay before re-enabling anti-cheat to prevent false positive
+  setTimeout(() => {
+    isZoomingImage = false;
+  }, 500);
 }
 
 // ============ TIMER ============
@@ -552,7 +633,6 @@ function startTimer() {
     sisaDetik--;
     updateTimerDisplay();
     if (sisaDetik <= 0) { clearInterval(timerInterval); toast('⏰ Waktu habis!', 'warning'); doSubmit(true); }
-    // Auto-save every 10s
     if (sisaDetik % 10 === 0) saveJawabanLocal();
   }, 1000);
 }
@@ -594,6 +674,7 @@ function showBlocked() {
   if (isBlocked) return;
   isBlocked = true; clientBlocked = true; examSubmitted = true; examActive = false;
   clearInterval(timerInterval); clearInterval(heartbeatInterval);
+  if (windowSizeCheckInterval) { clearInterval(windowSizeCheckInterval); windowSizeCheckInterval = null; }
   document.getElementById('blockedOverlay').classList.add('active');
 }
 
@@ -610,7 +691,6 @@ function subscribeWarning() {
     if (w && !w.Dibaca) showWarningPopup(w);
   });
   warningChannel.subscribe();
-  // Check unread
   checkUnreadWarnings();
 }
 
@@ -633,7 +713,7 @@ function showWarningPopup(warning) {
   const level = (warning.Level || 'YELLOW').toUpperCase();
   overlay.className = 'warning-overlay active ' + level.toLowerCase();
   const icons = { YELLOW: '🟡', ORANGE: '🟠', RED: '🔴' };
-  const titles = { YELLOW: 'Peringatan Kuning', ORANGE: 'Peringatan Oranye', RED: '⛔ PERINGATAN MERAH' };
+  const titles = { YELLOW: 'Peringatan Kuning', ORANGE: 'Peringatan Oranye', RED: '🚨 PERINGATAN MERAH' };
   document.getElementById('warnIcon').textContent = icons[level] || '⚠️';
   document.getElementById('warnTitle').textContent = titles[level] || 'PERINGATAN';
   document.getElementById('warnMsg').textContent = warning.Pesan || 'Anda mendapat peringatan dari pengawas.';
@@ -649,56 +729,235 @@ async function dismissWarning() {
   }
 }
 
-// ============ ANTI-CHEAT ============
+// ============ ENHANCED ANTI-CHEAT ============
 function setupAntiCheat() {
-  document.addEventListener('copy', e => { if (!examActive) return; e.preventDefault(); reportCheat('Ganti Tab', 'Copy'); });
-  document.addEventListener('cut', e => { if (!examActive) return; e.preventDefault(); reportCheat('Ganti Tab', 'Cut'); });
-  document.addEventListener('paste', e => { if (!examActive) return; e.preventDefault(); reportCheat('Ganti Tab', 'Paste'); });
-  document.addEventListener('contextmenu', e => { if (!examActive) return; e.preventDefault(); reportCheat('Klik Kanan', 'Right click'); });
-
-  document.addEventListener('keydown', e => {
+  // === 1. Clipboard operations ===
+  document.addEventListener('copy', e => { if (!examActive) return; e.preventDefault(); reportCheat('Copy', 'Mencoba menyalin konten'); });
+  document.addEventListener('cut', e => { if (!examActive) return; e.preventDefault(); reportCheat('Cut', 'Mencoba memotong konten'); });
+  document.addEventListener('paste', e => {
     if (!examActive) return;
-    if (e.ctrlKey && 'cvxauspi'.includes(e.key.toLowerCase())) { e.preventDefault(); reportCheat('Shortcut Keyboard', 'Ctrl+' + e.key.toUpperCase()); return false; }
-    if (e.key === 'F12') { e.preventDefault(); reportCheat('DevTools', 'F12'); return false; }
-    if (e.ctrlKey && e.shiftKey && 'ijc'.includes(e.key.toLowerCase())) { e.preventDefault(); reportCheat('DevTools', 'Ctrl+Shift+' + e.key.toUpperCase()); return false; }
-    if (e.key === 'PrintScreen') { e.preventDefault(); reportCheat('Screenshot', 'PrintScreen'); return false; }
-    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); return false; }
+    // Allow paste only in isian input
+    const isIsian = e.target && (e.target.id === 'isianInput' || e.target.classList.contains('isian-input'));
+    if (!isIsian) {
+      e.preventDefault();
+      reportCheat('Paste', 'Mencoba menempel konten');
+    }
   });
 
+  // === 2. Right click ===
+  document.addEventListener('contextmenu', e => {
+    if (!examActive) return;
+    e.preventDefault();
+    reportCheat('Klik Kanan', 'Menu konteks dicoba');
+  });
+
+  // === 3. Keyboard shortcuts ===
+  document.addEventListener('keydown', e => {
+    if (!examActive) return;
+
+    // Allow typing in isian input
+    const isIsian = e.target && (e.target.id === 'isianInput' || e.target.classList.contains('isian-input'));
+
+    // Block dangerous shortcuts
+    if (e.ctrlKey && !e.shiftKey && 'cvxauspi'.includes(e.key.toLowerCase())) {
+      if (isIsian && (e.key.toLowerCase() === 'a' || e.key.toLowerCase() === 'v')) {
+        // Allow Ctrl+A and Ctrl+V in isian input (but paste is monitored)
+        return;
+      }
+      e.preventDefault();
+      reportCheat('Shortcut', 'Ctrl+' + e.key.toUpperCase());
+      return false;
+    }
+    if (e.key === 'F12') { e.preventDefault(); reportCheat('DevTools', 'F12'); return false; }
+    if (e.ctrlKey && e.shiftKey && 'ijc'.includes(e.key.toLowerCase())) {
+      e.preventDefault(); reportCheat('DevTools', 'Ctrl+Shift+' + e.key.toUpperCase()); return false;
+    }
+
+    // Screenshot keys
+    if (e.key === 'PrintScreen') {
+      e.preventDefault();
+      reportCheat('Screenshot', 'PrintScreen key');
+      // Blur content briefly
+      blurContent();
+      return false;
+    }
+
+    // Windows + Shift + S (Windows screenshot)
+    if (e.metaKey && e.shiftKey && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      reportCheat('Screenshot', 'Win+Shift+S');
+      blurContent();
+      return false;
+    }
+
+    // Alt+Tab detection (key combination)
+    if (e.altKey && e.key === 'Tab') {
+      e.preventDefault();
+      reportCheat('Alt+Tab', 'Mencoba pindah aplikasi');
+      return false;
+    }
+
+    // Escape - prevent exiting fullscreen
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    }
+
+    // Windows key
+    if (e.metaKey && !e.shiftKey) {
+      // Don't block all meta key presses, but log suspicious ones
+    }
+  });
+
+  // === 4. Fullscreen change detection ===
   const handleFS = () => {
-    if (!examActive || examSubmitted || isBlocked || clientBlocked) return;
+    if (!examActive || examSubmitted || isBlocked || clientBlocked || isZoomingImage) return;
     if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-      reportCheat('Keluar Fullscreen', 'Fullscreen exit');
-      setTimeout(() => { if (examActive && !examSubmitted && !isBlocked && !clientBlocked) requestFS(); }, 1500);
+      reportCheat('Keluar Fullscreen', 'Fullscreen exit terdeteksi');
+      setTimeout(() => {
+        if (examActive && !examSubmitted && !isBlocked && !clientBlocked) requestFS();
+      }, 1500);
     }
   };
   document.addEventListener('fullscreenchange', handleFS);
   document.addEventListener('webkitfullscreenchange', handleFS);
 
+  // === 5. Tab/window visibility ===
   document.addEventListener('visibilitychange', () => {
-    if (!examActive || examSubmitted || isBlocked) return;
-    if (document.hidden) reportCheat('Ganti Tab', 'Tab hidden');
+    if (!examActive || examSubmitted || isBlocked || isZoomingImage) return;
+    if (document.hidden) {
+      reportCheat('Ganti Tab', 'Tab disembunyikan');
+    }
   });
 
+  // === 6. Window blur (more controlled) ===
   window.addEventListener('blur', () => {
-    if (!examActive || examSubmitted || isBlocked) return;
-    reportCheat('Focus Lost', 'Window blur');
+    if (!examActive || examSubmitted || isBlocked || isZoomingImage) return;
+    // Debounce: only report if focus is lost for more than 500ms
+    focusLostCount++;
+    setTimeout(() => {
+      if (!document.hasFocus() && examActive && !examSubmitted && !isBlocked && !isZoomingImage) {
+        reportCheat('Focus Lost', 'Jendela kehilangan fokus');
+      }
+    }, 500);
   });
 
-  document.addEventListener('mouseleave', () => {
-    if (!examActive || examSubmitted || isBlocked) return;
-    reportCheat('Mouse Leave', 'Cursor left');
+  // === 7. Mouse leave - with MUCH higher tolerance ===
+  document.addEventListener('mouseleave', (e) => {
+    if (!examActive || examSubmitted || isBlocked || isZoomingImage) return;
+
+    // Only report if mouse leaves from the top (trying to access browser UI)
+    // Ignore left, right, bottom edges to reduce false positives
+    const now = Date.now();
+    if (now - lastMouseLeaveTime < 10000) return; // 10 second cooldown between mouse leave reports
+
+    // Only trigger if mouse exits from top of screen (browser bar area)
+    if (e.clientY <= 5) {
+      lastMouseLeaveTime = now;
+      mouseLeaveCount++;
+      // Only report after 3 mouse leaves to top (reduce sensitivity)
+      if (mouseLeaveCount >= 3) {
+        reportCheat('Mouse Leave', 'Kursor meninggalkan area ujian berulang kali');
+        mouseLeaveCount = 0;
+      }
+    }
   });
 
+  // === 8. Drag prevention ===
   document.addEventListener('dragstart', e => e.preventDefault());
-  document.addEventListener('selectstart', e => { if (examActive) e.preventDefault(); });
+
+  // === 9. Text selection prevention ===
+  document.addEventListener('selectstart', e => {
+    if (examActive) {
+      // Allow selection in isian input
+      const isIsian = e.target && (e.target.id === 'isianInput' || e.target.classList.contains('isian-input'));
+      if (!isIsian) e.preventDefault();
+    }
+  });
+
+  // === 10. DevTools detection via timing ===
+  setInterval(() => {
+    if (!examActive || examSubmitted || isBlocked) return;
+    const start = performance.now();
+    debugger; // This pauses if devtools is open
+    const end = performance.now();
+    if (end - start > 50) {
+      reportCheat('DevTools', 'Developer tools terdeteksi terbuka');
+    }
+  }, 5000);
+
+  // === 11. Window resize detection (split screen) ===
+  window.addEventListener('resize', () => {
+    if (!examActive || examSubmitted || isBlocked || clientBlocked || isZoomingImage) return;
+
+    // Debounce resize events
+    if (resizeDebounce) clearTimeout(resizeDebounce);
+    resizeDebounce = setTimeout(() => {
+      const sw = screen.width;
+      const sh = screen.height;
+      const ww = window.innerWidth;
+      const wh = window.innerHeight;
+
+      const notFullscreen = !document.fullscreenElement && !document.webkitFullscreenElement;
+      const widthRatio = ww / sw;
+
+      if (notFullscreen && widthRatio < 0.68 && sw > 500) {
+        reportCheat('Resize/Split', `Ukuran jendela berubah drastis (${Math.round(widthRatio*100)}% lebar layar)`);
+        setTimeout(() => { if (examActive && !examSubmitted && !isBlocked && !clientBlocked) requestFS(); }, 1000);
+      }
+    }, 1000);
+  });
+
+  // === 12. Detect Picture-in-Picture API abuse ===
+  if ('pictureInPictureEnabled' in document) {
+    document.addEventListener('enterpictureinpicture', () => {
+      if (examActive) reportCheat('PiP', 'Picture-in-Picture terdeteksi');
+    });
+  }
+
+  // === 13. Detect screen capture API ===
+  if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+    const origGetDisplayMedia = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
+    navigator.mediaDevices.getDisplayMedia = function() {
+      if (examActive) {
+        reportCheat('Screen Capture', 'Percobaan screen capture API');
+        return Promise.reject(new Error('Screen capture blocked during exam'));
+      }
+      return origGetDisplayMedia.apply(this, arguments);
+    };
+  }
+
+  // === 14. Detect multiple screens ===
+  if (window.screen && 'isExtended' in window.screen) {
+    const checkExtended = () => {
+      if (examActive && window.screen.isExtended) {
+        reportCheat('Multi Monitor', 'Multiple screen terdeteksi');
+      }
+    };
+    window.screen.addEventListener?.('change', checkExtended);
+    setInterval(checkExtended, 10000);
+  }
+}
+
+// Blur exam content briefly when screenshot attempt is detected
+function blurContent() {
+  const examBody = document.querySelector('.exam-body');
+  if (examBody) {
+    examBody.classList.add('content-blurred');
+    setTimeout(() => {
+      examBody.classList.remove('content-blurred');
+    }, 3000);
+  }
 }
 
 async function reportCheat(jenis, detail) {
   if (!examActive || examSubmitted || isBlocked || clientBlocked || !currentSiswa) return;
+
   const now = Date.now();
-  if (now - lastViolationTime < 5000) return;
+  if (now - lastViolationTime < 5000) return; // 5 second cooldown
   lastViolationTime = now;
+
   violations++;
   saveViolationsLocal();
 
@@ -706,20 +965,36 @@ async function reportCheat(jenis, detail) {
   try {
     await fetch(SUPABASE_URL + '/rest/v1/KECURANGAN', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY, 'Prefer': 'return=minimal' },
-      body: JSON.stringify({ NIS: currentSiswa.NIS, Nama: currentSiswa.Nama, Jenis: jenis, Timestamp: new Date().toISOString() })
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({
+        NIS: currentSiswa.NIS,
+        Nama: currentSiswa.Nama,
+        Jenis: jenis,
+        Detail: detail,
+        Timestamp: new Date().toISOString()
+      })
     });
   } catch (e) {}
 
   if (violations >= 3) {
     clientBlocked = true; examActive = false;
-    document.getElementById('cheatMsg').textContent = (detail || jenis) + '. Pelanggaran ke-3! Akun diblokir.';
+    document.getElementById('cheatMsg').textContent = detail + '. Pelanggaran ke-3! Akun diblokir.';
     document.getElementById('cheatCount').textContent = 'Pelanggaran ke-' + violations + ' - DIBLOKIR';
     document.getElementById('cheatOverlay').classList.add('active');
     try {
       await fetch(SUPABASE_URL + '/rest/v1/SISWA?NIS=eq.' + encodeURIComponent(currentSiswa.NIS), {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY, 'Prefer': 'return=minimal' },
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+          'Prefer': 'return=minimal'
+        },
         body: JSON.stringify({ Status: 'BLOCKED' })
       });
     } catch (e) {}
@@ -727,7 +1002,7 @@ async function reportCheat(jenis, detail) {
     return;
   }
 
-  document.getElementById('cheatMsg').textContent = (detail || jenis) + '. Dicatat dan dilaporkan.';
+  document.getElementById('cheatMsg').textContent = detail + '. Dicatat dan dilaporkan.';
   document.getElementById('cheatCount').textContent = 'Pelanggaran ke-' + violations + ' dari 3';
   document.getElementById('cheatOverlay').classList.add('active');
   updateGrid();
@@ -753,6 +1028,7 @@ function openSubmitModal() {
     (unanswered > 0 ? '<br><span style="color:var(--danger)">⚠️ ' + unanswered + ' soal belum dijawab!</span>' : '') +
     (flagCount > 0 ? '<br><span style="color:var(--warning)">🚩 ' + flagCount + ' soal ditandai ragu</span>' : '') +
     '<br>Jawaban <strong>tidak dapat diubah</strong> setelah dikumpulkan.';
+
   document.getElementById('submitModal').classList.add('active');
 }
 
@@ -765,9 +1041,10 @@ async function doSubmit(auto) {
   document.getElementById('submitModal').classList.remove('active');
   clearInterval(timerInterval);
   clearInterval(heartbeatInterval);
+  if (windowSizeCheckInterval) { clearInterval(windowSizeCheckInterval); windowSizeCheckInterval = null; }
+
   showL();
 
-  // ========== HITUNG BENAR, SALAH, KOSONG, SKOR ==========
   let benar = 0, salah = 0, kosong = 0, totalSkor = 0;
   const jawabanRinci = {};
 
@@ -787,7 +1064,6 @@ async function doSubmit(auto) {
       if (tipe === 'PG') isCorrect = jawabanSiswa.toUpperCase() === kunci.toUpperCase();
       else if (tipe === 'BS') isCorrect = jawabanSiswa.toUpperCase() === kunci.toUpperCase();
       else if (tipe === 'IS') isCorrect = jawabanSiswa.toLowerCase() === kunci.toLowerCase();
-
       if (isCorrect) { benar++; totalSkor += bobot; }
       else { salah++; }
     }
@@ -801,18 +1077,20 @@ async function doSubmit(auto) {
   };
 
   let success = false;
-
-  // Method 1: Direct fetch
   try {
     const response = await fetch(SUPABASE_URL + '/rest/v1/HASIL', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY, 'Prefer': 'return=minimal' },
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+        'Prefer': 'return=minimal'
+      },
       body: JSON.stringify(payload)
     });
     if (response.ok || response.status === 201) success = true;
     else throw new Error('HTTP ' + response.status);
   } catch (fetchErr) {
-    // Method 2: Supabase JS
     try {
       const { error } = await sb.from('HASIL').insert([payload]);
       if (!error) success = true;
@@ -827,7 +1105,12 @@ async function doSubmit(auto) {
     try {
       await fetch(SUPABASE_URL + '/rest/v1/SISWA?NIS=eq.' + encodeURIComponent(currentSiswa.NIS), {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY, 'Prefer': 'return=minimal' },
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+          'Prefer': 'return=minimal'
+        },
         body: JSON.stringify({ Status: 'SELESAI' })
       });
     } catch (e) { await sb.from('SISWA').update({ Status: 'SELESAI' }).eq('NIS', currentSiswa.NIS); }
@@ -862,7 +1145,7 @@ function loadJawabanLocal() {
     const s = localStorage.getItem('cbt_jawaban_' + currentSiswa.NIS + '_' + currentMapel);
     if (!s) return null;
     const d = JSON.parse(s);
-    if (Date.now() - d.time > 10800000) return null; // 3 hours
+    if (Date.now() - d.time > 10800000) return null;
     return d;
   } catch (e) { return null; }
 }
