@@ -9,7 +9,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ============ IMGBB CONFIG ============
 // Dapatkan API key gratis di: https://api.imgbb.com/
-const IMGBB_API_KEY = 'GANTI_DENGAN_API_KEY_ANDA';
+const IMGBB_API_KEY = 'fbd7325fe5024edb46d61cefad1d6621';
 
 // ============ CREDENTIALS ============
 const VALID_USERS = [
