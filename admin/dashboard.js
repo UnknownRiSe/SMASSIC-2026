@@ -1,666 +1,490 @@
 // ============================================================
-// CBT SMASSIC 2026 - ADMIN DASHBOARD (FULL UPGRADE)
-// Timer, Soal Multi-tipe, Peringatan, Export, LaTeX
+// CBT SMASSIC 2026 — PANEL PENGAWAS (FULL)
+// Upload gambar via ImgBB (free, unlimited)
 // ============================================================
 
 const SUPABASE_URL = 'https://wwchdqtqakpbjswkavnm.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_rwPcbkV7Y6Fi1AKCET40Yg_ae7HGaZr';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// ============ IMGBB CONFIG ============
+// Dapatkan API key gratis di: https://api.imgbb.com/
+const IMGBB_API_KEY = 'GANTI_DENGAN_API_KEY_ANDA';
+
+// ============ CREDENTIALS ============
+const VALID_USERS = [
+    { username: 'admin', password: 'admin123', nama: 'Administrator' },
+    { username: 'pengawas', password: 'pengawas123', nama: 'Pengawas Ujian' }
+];
+
 // ============ STATE ============
-let siswaData = [];
-let kecuranganData = [];
-let hasilData = [];
-let soalData = [];
-let pengaturanData = [];
-let peringatanData = [];
-let realtimeChannel = null;
-let confirmModal = null;
-let soalModal = null;
+let currentUser = null;
+let siswaList = [];
+let soalList = [];
+let hasilList = [];
+let cheatList = [];
+let siswaModal, soalModal, detailHasilModal;
+let toastEl;
+let refreshInterval = null;
+
+// ============ MAPEL CONFIG ============
+const MAPEL_LIST = [
+    { nama: 'Matematika', icon: '📐', color: '#3b82f6' },
+    { nama: 'IPA', icon: '🔬', color: '#10b981' },
+    { nama: 'IPS', icon: '🌍', color: '#f59e0b' }
+];
 
 // ============ INIT ============
-document.addEventListener('DOMContentLoaded', async () => {
-  confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
-  soalModal = new bootstrap.Modal(document.getElementById('soalModal'));
-  startClock();
-  
-  // Live preview for soal text
-  const soalText = document.getElementById('soalText');
-  if (soalText) {
-    soalText.addEventListener('input', () => {
-      const preview = document.getElementById('soalPreview');
-      preview.innerHTML = soalText.value || 'Preview muncul di sini...';
-      renderMathIn(preview);
+document.addEventListener('DOMContentLoaded', () => {
+    siswaModal = new bootstrap.Modal(document.getElementById('modalSiswa'));
+    soalModal = new bootstrap.Modal(document.getElementById('modalSoal'));
+    detailHasilModal = new bootstrap.Modal(document.getElementById('modalDetailHasil'));
+    toastEl = new bootstrap.Toast(document.getElementById('liveToast'), { delay: 3500 });
+
+    // Check saved session
+    const saved = localStorage.getItem('cbt_pengawas');
+    if (saved) {
+        try {
+            currentUser = JSON.parse(saved);
+            showDashboard();
+        } catch (e) {
+            localStorage.removeItem('cbt_pengawas');
+        }
+    }
+
+    // Enter key login
+    document.getElementById('loginUser').addEventListener('keydown', e => {
+        if (e.key === 'Enter') document.getElementById('loginPass').focus();
     });
-  }
-  
-  await checkSession();
+    document.getElementById('loginPass').addEventListener('keydown', e => {
+        if (e.key === 'Enter') doLogin();
+    });
+
+    // Load theme
+    const theme = localStorage.getItem('cbt_theme') || 'light';
+    document.documentElement.setAttribute('data-bs-theme', theme);
+
+    // Tab change listeners
+    document.querySelectorAll('#mainTabs button[data-bs-toggle="tab"]').forEach(btn => {
+        btn.addEventListener('shown.bs.tab', e => {
+            const target = e.target.getAttribute('data-bs-target');
+            if (target === '#paneSiswa') loadSiswa();
+            if (target === '#paneSoal') loadSoal();
+            if (target === '#panePengaturan') loadPengaturan();
+            if (target === '#paneHasil') loadHasil();
+            if (target === '#paneCheat') loadCheat();
+        });
+    });
 });
 
-function renderMathIn(el) {
-  if (window.renderMathInElement) {
-    renderMathInElement(el, {
-      delimiters: [
-        {left: '$$', right: '$$', display: true},
-        {left: '$', right: '$', display: false},
-        {left: '\\(', right: '\\)', display: false},
-        {left: '\\[', right: '\\]', display: true}
-      ],
-      throwOnError: false
-    });
-  }
+// ============ THEME ============
+function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-bs-theme');
+    const next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-bs-theme', next);
+    localStorage.setItem('cbt_theme', next);
 }
 
-// ============ CLOCK ============
-function startClock() {
-  const update = () => {
-    document.getElementById('liveClock').textContent = new Date().toLocaleTimeString('id-ID');
-  };
-  update(); setInterval(update, 1000);
-}
-
-// ============ AUTH ============
-async function checkSession() {
-  try {
-    const { data: { session } } = await sb.auth.getSession();
-    if (session && session.user) showDashboard(session.user);
-    else showLogin();
-  } catch (e) { showLogin(); }
-}
-
-function showLogin() {
-  document.getElementById('loginPage').classList.remove('d-none');
-  document.getElementById('loginPage').style.display = 'flex';
-  document.getElementById('dashboardPage').classList.add('d-none');
-}
-
-function showDashboard(user) {
-  document.getElementById('loginPage').style.display = 'none';
-  document.getElementById('loginPage').classList.add('d-none');
-  document.getElementById('dashboardPage').classList.remove('d-none');
-  document.getElementById('adminEmail').textContent = user.email || 'Admin';
-  loadAllData();
-  subscribeRealtime();
-}
-
-async function handleLogin(e) {
-  e.preventDefault();
-  const email = document.getElementById('inEmail').value.trim();
-  const password = document.getElementById('inPassword').value.trim();
-  const alertEl = document.getElementById('loginAlert');
-  const spinner = document.getElementById('loginSpinner');
-  const btn = document.getElementById('btnLogin');
-  alertEl.classList.add('d-none');
-  spinner.classList.remove('d-none');
-  btn.disabled = true;
-  try {
-    const { data, error } = await sb.auth.signInWithPassword({ email, password });
-    spinner.classList.add('d-none'); btn.disabled = false;
-    if (error) { alertEl.textContent = error.message; alertEl.classList.remove('d-none'); return; }
-    if (data.user) { showToast('Login berhasil!', 'success'); showDashboard(data.user); }
-  } catch (err) {
-    spinner.classList.add('d-none'); btn.disabled = false;
-    alertEl.textContent = err.message; alertEl.classList.remove('d-none');
-  }
-  return false;
-}
-
-async function handleLogout() {
-  await sb.auth.signOut();
-  unsubscribeRealtime();
-  siswaData = []; kecuranganData = []; hasilData = []; soalData = [];
-  showLogin(); showToast('Berhasil logout', 'info');
-}
-
-function togglePassword() {
-  const inp = document.getElementById('inPassword');
-  const icon = document.getElementById('eyeIcon');
-  if (inp.type === 'password') { inp.type = 'text'; icon.className = 'bi bi-eye-slash'; }
-  else { inp.type = 'password'; icon.className = 'bi bi-eye'; }
-}
-
-// ============ SIDEBAR & NAVIGATION ============
-function toggleSidebar() {
-  const sidebar = document.getElementById('sidebar');
-  sidebar.classList.toggle('show');
-  let overlay = document.querySelector('.sidebar-overlay');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.className = 'sidebar-overlay';
-    overlay.onclick = () => { sidebar.classList.remove('show'); overlay.classList.remove('show'); };
-    document.body.appendChild(overlay);
-  }
-  overlay.classList.toggle('show');
-}
-
-function switchSection(name) {
-  document.querySelectorAll('.section-panel').forEach(s => s.classList.add('d-none'));
-  const target = document.getElementById('sec-' + name);
-  if (target) target.classList.remove('d-none');
-  document.querySelectorAll('#sidebar .nav-link').forEach(n => {
-    n.classList.toggle('active', n.getAttribute('data-section') === name);
-  });
-  const titles = {
-    overview: '📊 Overview', pengaturan: '⚙️ Pengaturan Ujian', siswa: '👥 Monitor Siswa',
-    kecurangan: '⚠️ Live Kecurangan', peringatan: '🔔 Peringatan', hasil: '📋 Rekap Nilai', soal: '📝 Bank Soal'
-  };
-  document.getElementById('sectionTitle').textContent = titles[name] || name;
-  document.getElementById('sidebar').classList.remove('show');
-  const overlay = document.querySelector('.sidebar-overlay');
-  if (overlay) overlay.classList.remove('show');
-
-  // Lazy load
-  if (name === 'pengaturan') loadPengaturan();
-  if (name === 'peringatan') loadPeringatan();
-}
-
-// ============ LOAD ALL DATA ============
-async function loadAllData() {
-  await Promise.all([loadSiswa(), loadKecurangan(), loadHasil(), loadSoal(), loadPengaturan(), loadPeringatan()]);
-  updateOverviewStats();
-}
-
-// ============ PENGATURAN (TIMER) ============
-async function loadPengaturan() {
-  try {
-    const { data, error } = await sb.from('PENGATURAN').select('*').order('Mapel');
-    if (error) throw error;
-    pengaturanData = data || [];
-    renderPengaturan();
-  } catch (e) { showToast('Gagal memuat pengaturan: ' + e.message, 'error'); }
-}
-
-function renderPengaturan() {
-  const body = document.getElementById('pengaturanBody');
-  if (!pengaturanData.length) {
-    body.innerHTML = '<p class="text-muted">Belum ada pengaturan mapel.</p>';
-    return;
-  }
-  body.innerHTML = pengaturanData.map(p => {
-    const statusBadge = p.Status_ujian === 'AKTIF' 
-      ? '<span class="badge bg-success">🟢 AKTIF</span>' 
-      : p.Status_ujian === 'SELESAI' 
-        ? '<span class="badge bg-secondary">⏹ SELESAI</span>'
-        : '<span class="badge bg-warning text-dark">⏸ BELUM</span>';
-    return `
-    <div class="card border mb-3">
-      <div class="card-body">
-        <div class="d-flex align-items-center justify-content-between mb-3">
-          <h6 class="fw-bold mb-0"><i class="bi bi-book"></i> ${esc(p.Mapel)}</h6>
-          ${statusBadge}
-        </div>
-        <div class="row g-3 align-items-end">
-          <div class="col-md-3">
-            <label class="form-label small fw-semibold">Durasi (menit)</label>
-            <input type="number" class="form-control form-control-sm" value="${p.Durasi_menit || 90}" id="dur-${p.id}" min="1" max="300">
-          </div>
-          <div class="col-md-3">
-            <label class="form-label small fw-semibold">Acak Soal</label>
-            <select class="form-select form-select-sm" id="acak-${p.id}">
-              <option value="true" ${p.Acak_soal ? 'selected' : ''}>Ya</option>
-              <option value="false" ${!p.Acak_soal ? 'selected' : ''}>Tidak</option>
-            </select>
-          </div>
-          <div class="col-md-6">
-            <div class="btn-group btn-group-sm">
-              <button class="btn btn-outline-primary" onclick="savePengaturan(${p.id})"><i class="bi bi-save"></i> Simpan</button>
-              <button class="btn btn-success" onclick="startExamMapel('${esc(p.Mapel)}',${p.id})"><i class="bi bi-play-fill"></i> Mulai</button>
-              <button class="btn btn-danger" onclick="stopExamMapel('${esc(p.Mapel)}',${p.id})"><i class="bi bi-stop-fill"></i> Stop</button>
-              <button class="btn btn-outline-danger" onclick="deletePengaturan(${p.id},'${esc(p.Mapel)}')"><i class="bi bi-trash"></i></button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-async function savePengaturan(id) {
-  const dur = parseInt(document.getElementById('dur-' + id).value) || 90;
-  const acak = document.getElementById('acak-' + id).value === 'true';
-  try {
-    const { error } = await sb.from('PENGATURAN').update({ Durasi_menit: dur, Acak_soal: acak, Updated_at: new Date().toISOString() }).eq('id', id);
-    if (error) throw error;
-    showToast('Pengaturan disimpan!', 'success');
-    loadPengaturan();
-  } catch (e) { showToast('Gagal: ' + e.message, 'error'); }
-}
-
-async function startExamMapel(mapel, id) {
-  try {
-    const now = new Date();
-    const p = pengaturanData.find(x => x.id === id);
-    const dur = parseInt(document.getElementById('dur-' + id)?.value) || p?.Durasi_menit || 90;
-    const end = new Date(now.getTime() + dur * 60000);
-    const { error } = await sb.from('PENGATURAN').update({
-      Status_ujian: 'AKTIF', Waktu_mulai: now.toISOString(), Waktu_selesai: end.toISOString(),
-      Durasi_menit: dur, Updated_at: now.toISOString()
-    }).eq('id', id);
-    if (error) throw error;
-    showToast(`Ujian ${mapel} dimulai! (${dur} menit)`, 'success');
-    loadPengaturan();
-  } catch (e) { showToast('Gagal: ' + e.message, 'error'); }
-}
-
-async function stopExamMapel(mapel, id) {
-  try {
-    const { error } = await sb.from('PENGATURAN').update({
-      Status_ujian: 'SELESAI', Updated_at: new Date().toISOString()
-    }).eq('id', id);
-    if (error) throw error;
-    showToast(`Ujian ${mapel} dihentikan`, 'warning');
-    loadPengaturan();
-  } catch (e) { showToast('Gagal: ' + e.message, 'error'); }
-}
-
-async function startAllExams() {
-  showConfirm('▶️', 'Mulai Semua Ujian', 'Mulai semua ujian sekarang?', 'btn-success', async () => {
-    for (const p of pengaturanData) {
-      await startExamMapel(p.Mapel, p.id);
+function toggleLoginPw() {
+    const inp = document.getElementById('loginPass');
+    const icon = document.getElementById('loginPwIcon');
+    if (inp.type === 'password') {
+        inp.type = 'text';
+        icon.className = 'bi bi-eye-slash';
+    } else {
+        inp.type = 'password';
+        icon.className = 'bi bi-eye';
     }
-  });
 }
 
-async function stopAllExams() {
-  showConfirm('⏹', 'Hentikan Semua', 'Hentikan semua ujian?', 'btn-danger', async () => {
-    for (const p of pengaturanData) {
-      await stopExamMapel(p.Mapel, p.id);
+// ============ TOAST ============
+function showToast(msg, type = 'info') {
+    const toast = document.getElementById('liveToast');
+    toast.className = 'toast align-items-center border-0 text-white bg-' + type;
+    document.getElementById('toastBody').textContent = msg;
+    toastEl.show();
+}
+
+// ============ ESCAPE HTML ============
+function esc(str) {
+    if (!str) return '';
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+}
+
+// ============ LOGIN/LOGOUT ============
+function doLogin() {
+    const username = document.getElementById('loginUser').value.trim();
+    const password = document.getElementById('loginPass').value.trim();
+    const alertEl = document.getElementById('loginAlert');
+    alertEl.classList.add('d-none');
+
+    if (!username || !password) {
+        alertEl.textContent = 'Username dan password wajib diisi!';
+        alertEl.classList.remove('d-none');
+        return;
     }
-  });
+
+    const user = VALID_USERS.find(u => u.username === username && u.password === password);
+    if (!user) {
+        alertEl.textContent = 'Username atau password salah!';
+        alertEl.classList.remove('d-none');
+        return;
+    }
+
+    currentUser = user;
+    localStorage.setItem('cbt_pengawas', JSON.stringify(user));
+    showDashboard();
 }
 
-async function addMapelPengaturan() {
-  const mapel = prompt('Nama mapel baru:');
-  if (!mapel) return;
-  try {
-    const { error } = await sb.from('PENGATURAN').insert({ Mapel: mapel.trim(), Durasi_menit: 90 });
-    if (error) throw error;
-    showToast('Mapel ditambahkan', 'success');
+function doLogout() {
+    if (!confirm('Yakin keluar?')) return;
+    currentUser = null;
+    localStorage.removeItem('cbt_pengawas');
+    if (refreshInterval) { clearInterval(refreshInterval); refreshInterval = null; }
+    document.getElementById('dashboardSection').classList.add('d-none');
+    document.getElementById('loginSection').style.display = '';
+    document.getElementById('loginUser').value = '';
+    document.getElementById('loginPass').value = '';
+}
+
+function showDashboard() {
+    document.getElementById('loginSection').style.display = 'none';
+    document.getElementById('dashboardSection').classList.remove('d-none');
+    document.getElementById('navUser').textContent = currentUser.nama;
+    loadSiswa();
+    loadSoal();
     loadPengaturan();
-  } catch (e) { showToast('Gagal: ' + e.message, 'error'); }
+    loadCheat();
+    loadHasil();
+
+    // Auto-refresh every 15s
+    if (refreshInterval) clearInterval(refreshInterval);
+    refreshInterval = setInterval(() => {
+        loadSiswa();
+        loadCheat();
+    }, 15000);
 }
 
-async function deletePengaturan(id, mapel) {
-  showConfirm('🗑️', 'Hapus Mapel', `Hapus pengaturan "${mapel}"?`, 'btn-danger', async () => {
-    await sb.from('PENGATURAN').delete().eq('id', id);
-    showToast('Dihapus', 'success');
-    loadPengaturan();
-  });
+// ============ FORMAT HELPERS ============
+function formatTime(iso) {
+    if (!iso) return '-';
+    try {
+        const d = new Date(iso);
+        return d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    } catch (e) { return '-'; }
 }
 
-// ============ PERINGATAN (WARNING SYSTEM) ============
-async function loadPeringatan() {
-  try {
-    const { data, error } = await sb.from('PERINGATAN').select('*').order('Timestamp', { ascending: false }).limit(200);
-    if (error) throw error;
-    peringatanData = data || [];
-    renderPeringatan();
-    populateWarnSiswa();
-    updateNavBadges();
-  } catch (e) { showToast('Gagal memuat peringatan: ' + e.message, 'error'); }
+function formatDateTime(iso) {
+    if (!iso) return '-';
+    try {
+        const d = new Date(iso);
+        return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) + ' ' +
+               d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    } catch (e) { return '-'; }
 }
 
-function renderPeringatan() {
-  const tbody = document.getElementById('warnBody');
-  if (!peringatanData.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Belum ada peringatan</td></tr>';
-    return;
-  }
-  tbody.innerHTML = peringatanData.map((w, i) => {
-    const levelBadge = w.Level === 'RED' ? '<span class="badge bg-danger">🔴 RED</span>'
-      : w.Level === 'ORANGE' ? '<span class="badge bg-warning text-dark">🟠 ORANGE</span>'
-      : '<span class="badge bg-warning text-dark">🟡 YELLOW</span>';
-    const statusBadge = w.Dibaca ? '<span class="badge bg-success">Dibaca</span>' : '<span class="badge bg-secondary">Belum</span>';
-    return `<tr>
-      <td>${i+1}</td>
-      <td class="small text-nowrap">${formatTimestamp(w.Timestamp)}</td>
-      <td><code>${esc(w.NIS)}</code></td>
-      <td>${esc(w.Nama)}</td>
-      <td>${levelBadge}</td>
-      <td class="small">${esc(w.Pesan)}</td>
-      <td>${statusBadge}</td>
-    </tr>`;
-  }).join('');
+function timeAgo(iso) {
+    if (!iso) return '-';
+    try {
+        const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+        if (diff < 0) return 'baru saja';
+        if (diff < 30) return 'baru saja';
+        if (diff < 60) return diff + ' dtk lalu';
+        if (diff < 3600) return Math.floor(diff/60) + ' mnt lalu';
+        return Math.floor(diff/3600) + ' jam lalu';
+    } catch (e) { return '-'; }
 }
 
-function populateWarnSiswa() {
-  const sel = document.getElementById('warnSiswa');
-  sel.innerHTML = '<option value="">-- Pilih Siswa --</option>';
-  const onlineSiswa = siswaData.filter(s => ['ONLINE'].includes((s.Status||'').toUpperCase()));
-  const allSiswa = onlineSiswa.length > 0 ? onlineSiswa : siswaData;
-  allSiswa.forEach(s => {
-    sel.innerHTML += `<option value="${esc(s.NIS)}" data-nama="${esc(s.Nama)}">${esc(s.NIS)} - ${esc(s.Nama)}</option>`;
-  });
+function heartbeatStatus(iso) {
+    if (!iso) return { cls: 'dead', text: 'Tidak ada' };
+    const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+    if (diff < 60) return { cls: 'alive', text: timeAgo(iso) };
+    if (diff < 300) return { cls: 'stale', text: timeAgo(iso) };
+    return { cls: 'dead', text: timeAgo(iso) };
 }
 
-function applyPresetMsg() {
-  const preset = document.getElementById('warnPreset').value;
-  if (preset) document.getElementById('warnMsg').value = preset;
+function statusBadge(status) {
+    const s = (status || 'OFFLINE').toUpperCase();
+    const map = {
+        ONLINE: { cls: 'online', icon: '🟢', label: 'Online' },
+        OFFLINE: { cls: 'offline', icon: '⚪', label: 'Offline' },
+        SELESAI: { cls: 'selesai', icon: '🔵', label: 'Selesai' },
+        BLOCKED: { cls: 'blocked', icon: '🔴', label: 'Blocked' },
+        KICKED: { cls: 'kicked', icon: '🟠', label: 'Kicked' }
+    };
+    const m = map[s] || map.OFFLINE;
+    return `<span class="status-badge ${m.cls}">${m.icon} ${m.label}</span>`;
 }
 
-async function sendWarning() {
-  const sel = document.getElementById('warnSiswa');
-  const nis = sel.value;
-  const nama = sel.selectedOptions[0]?.dataset?.nama || '';
-  const level = document.getElementById('warnLevel').value;
-  const msg = document.getElementById('warnMsg').value.trim();
-  if (!nis) { showToast('Pilih siswa!', 'error'); return; }
-  if (!msg) { showToast('Tulis pesan!', 'error'); return; }
-  try {
-    const { error } = await sb.from('PERINGATAN').insert({
-      NIS: nis, Nama: nama, Level: level, Pesan: msg, Dibaca: false, Timestamp: new Date().toISOString()
-    });
-    if (error) throw error;
-    showToast(`Peringatan ${level} terkirim ke ${nama}`, 'success');
-    document.getElementById('warnMsg').value = '';
-    loadPeringatan();
-  } catch (e) { showToast('Gagal: ' + e.message, 'error'); }
-}
-
-function confirmResetPeringatan() {
-  showConfirm('⚠️', 'Reset Peringatan', 'Hapus semua peringatan?', 'btn-danger', async () => {
-    await sb.from('PERINGATAN').delete().neq('NIS', '__never__');
-    peringatanData = []; renderPeringatan(); updateNavBadges();
-    showToast('Semua peringatan dihapus', 'success');
-  });
-}
-
-// ============ LOAD SISWA ============
+// ================================================================
+//                         TAB SISWA
+// ================================================================
 async function loadSiswa() {
-  try {
-    const { data, error } = await sb.from('SISWA').select('NIS, Nama, Sekolah, Status, Last_Heartbeat').order('NIS', { ascending: true });
-    if (error) throw error;
-    siswaData = data || [];
-    renderSiswa(siswaData);
-    updateOverviewStats();
-    populateWarnSiswa();
-  } catch (e) { showToast('Gagal memuat siswa: ' + e.message, 'error'); }
+    try {
+        const { data, error } = await sb.from('SISWA')
+            .select('*').order('Nama', { ascending: true });
+        if (error) throw error;
+        siswaList = data || [];
+        renderSiswa();
+        updateWarnTargets();
+    } catch (e) {
+        showToast('Gagal memuat siswa: ' + e.message, 'danger');
+    }
 }
 
-function renderSiswa(list) {
-  const tbody = document.getElementById('siswaBody');
-  if (!list || !list.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><i class="bi bi-people"></i>Tidak ada data siswa</td></tr>';
-    document.getElementById('siswaFooter').textContent = 'Total: 0 siswa';
-    return;
-  }
-  tbody.innerHTML = list.map((s, i) => {
-    const statusClass = getStatusClass(s.Status);
-    const hb = formatHeartbeat(s.Last_Heartbeat);
-    return `<tr id="siswa-row-${s.NIS}">
-      <td>${i+1}</td>
-      <td><code class="fw-bold">${esc(s.NIS)}</code></td>
-      <td>${esc(s.Nama)}</td>
-      <td>${esc(s.Sekolah||'-')}</td>
-      <td><span class="status-badge ${statusClass}"><span class="dot"></span> ${esc(s.Status||'OFFLINE')}</span></td>
-      <td><span class="hb-text ${hb.cls}">${hb.text}</span></td>
-      <td>
-        <div class="btn-group btn-group-sm">
-          <button class="btn btn-outline-warning btn-sm" onclick="sendQuickWarn('${esc(s.NIS)}','${esc(s.Nama)}')" title="Kirim Peringatan"><i class="bi bi-bell"></i></button>
-          <button class="btn btn-outline-secondary btn-sm" onclick="resetSiswaLogin('${esc(s.NIS)}')" title="Reset"><i class="bi bi-arrow-counterclockwise"></i></button>
-          <button class="btn btn-outline-danger btn-sm" onclick="blockSiswa('${esc(s.NIS)}','${esc(s.Nama)}')" title="Block"><i class="bi bi-slash-circle"></i></button>
-        </div>
-      </td>
-    </tr>`;
-  }).join('');
-  document.getElementById('siswaFooter').textContent = `Total: ${list.length} siswa`;
+function renderSiswa() {
+    const tbody = document.getElementById('tbodySiswa');
+    const search = (document.getElementById('searchSiswa').value || '').toLowerCase();
+
+    let filtered = siswaList;
+    if (search) {
+        filtered = siswaList.filter(s =>
+            (s.Nama || '').toLowerCase().includes(search) ||
+            (s.NIS || '').toLowerCase().includes(search) ||
+            (s.Sekolah || '').toLowerCase().includes(search)
+        );
+    }
+
+    // Stats
+    const online = siswaList.filter(s => (s.Status || '').toUpperCase() === 'ONLINE').length;
+    const selesai = siswaList.filter(s => (s.Status || '').toUpperCase() === 'SELESAI').length;
+    const blocked = siswaList.filter(s => ['BLOCKED','KICKED'].includes((s.Status || '').toUpperCase())).length;
+    document.getElementById('statOnline').textContent = online;
+    document.getElementById('statTotal').textContent = siswaList.length;
+    document.getElementById('statSelesai').textContent = selesai;
+    document.getElementById('statBlocked').textContent = blocked;
+    document.getElementById('badgeSiswa').textContent = siswaList.length;
+
+    if (!filtered.length) {
+        tbody.innerHTML = `<tr><td colspan="6">
+            <div class="empty-state">
+                <div class="empty-icon">👥</div>
+                <div class="empty-text">Belum ada siswa</div>
+                <div class="empty-sub">Klik "Tambah Siswa" untuk menambahkan</div>
+            </div></td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = filtered.map(s => {
+        const hb = heartbeatStatus(s.Last_Heartbeat);
+        const st = (s.Status || 'OFFLINE').toUpperCase();
+        return `<tr>
+            <td><code>${esc(s.NIS)}</code></td>
+            <td class="fw-semibold">${esc(s.Nama)}</td>
+            <td class="text-muted">${esc(s.Sekolah || '-')}</td>
+            <td>${statusBadge(s.Status)}</td>
+            <td><span class="hb-dot ${hb.cls}"></span>${hb.text}</td>
+            <td class="text-center text-nowrap">
+                <button class="btn-action" onclick="openSiswaModal('${esc(s.NIS)}')" title="Edit">
+                    <i class="bi bi-pencil"></i>
+                </button>
+                ${st === 'BLOCKED' || st === 'KICKED' ?
+                    `<button class="btn-action success" onclick="activateSiswa('${esc(s.NIS)}')" title="Aktifkan">
+                        <i class="bi bi-unlock"></i>
+                    </button>` : ''}
+                ${st === 'ONLINE' ?
+                    `<button class="btn-action warning" onclick="kickSiswa('${esc(s.NIS)}')" title="Kick">
+                        <i class="bi bi-box-arrow-right"></i>
+                    </button>
+                    <button class="btn-action danger" onclick="blockSiswa('${esc(s.NIS)}')" title="Block">
+                        <i class="bi bi-slash-circle"></i>
+                    </button>` : ''}
+                <button class="btn-action danger" onclick="deleteSiswa('${esc(s.NIS)}')" title="Hapus">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </td>
+        </tr>`;
+    }).join('');
 }
 
-function sendQuickWarn(nis, nama) {
-  document.getElementById('warnSiswa').value = nis;
-  document.getElementById('warnMsg').value = '';
-  switchSection('peringatan');
+function filterSiswa() { renderSiswa(); }
+
+// CRUD Siswa
+function openSiswaModal(nis) {
+    const isEdit = !!nis;
+    document.getElementById('modalSiswaTitle').textContent = isEdit ? 'Edit Siswa' : 'Tambah Siswa';
+    document.getElementById('siswaEditNIS').value = '';
+    document.getElementById('siswaNIS').value = '';
+    document.getElementById('siswaNIS').disabled = false;
+    document.getElementById('siswaNama').value = '';
+    document.getElementById('siswaSekolah').value = '';
+    document.getElementById('siswaPassword').value = '';
+
+    if (isEdit) {
+        const s = siswaList.find(x => x.NIS === nis);
+        if (s) {
+            document.getElementById('siswaEditNIS').value = s.NIS;
+            document.getElementById('siswaNIS').value = s.NIS;
+            document.getElementById('siswaNIS').disabled = true;
+            document.getElementById('siswaNama').value = s.Nama || '';
+            document.getElementById('siswaSekolah').value = s.Sekolah || '';
+            document.getElementById('siswaPassword').value = s.Password || '';
+        }
+    }
+    siswaModal.show();
 }
 
-function filterSiswa() {
-  const q = (document.getElementById('searchSiswa').value || '').toLowerCase();
-  const st = document.getElementById('filterStatus').value;
-  const filtered = siswaData.filter(s => {
-    const matchSearch = !q || (s.NIS||'').toLowerCase().includes(q) || (s.Nama||'').toLowerCase().includes(q);
-    const matchStatus = !st || (s.Status||'OFFLINE').toUpperCase() === st;
-    return matchSearch && matchStatus;
-  });
-  renderSiswa(filtered);
+async function saveSiswa() {
+    const editNIS = document.getElementById('siswaEditNIS').value;
+    const isEdit = !!editNIS;
+    const nis = document.getElementById('siswaNIS').value.trim();
+    const nama = document.getElementById('siswaNama').value.trim();
+    const sekolah = document.getElementById('siswaSekolah').value.trim();
+    const password = document.getElementById('siswaPassword').value.trim();
+
+    if (!nis || !nama || !password) {
+        showToast('NIS, Nama, dan Password wajib diisi!', 'warning');
+        return;
+    }
+
+    const payload = { Nama: nama, Sekolah: sekolah, Password: password };
+
+    try {
+        if (isEdit) {
+            const { error } = await sb.from('SISWA').update(payload).eq('NIS', editNIS);
+            if (error) throw error;
+            showToast('Siswa diupdate!', 'success');
+        } else {
+            payload.NIS = nis;
+            payload.Status = 'OFFLINE';
+            const { error } = await sb.from('SISWA').insert(payload);
+            if (error) throw error;
+            showToast('Siswa ditambahkan!', 'success');
+        }
+        siswaModal.hide();
+        loadSiswa();
+    } catch (e) {
+        showToast('Gagal: ' + e.message, 'danger');
+    }
 }
 
-function updateSiswaRow(nis, newData) {
-  const idx = siswaData.findIndex(s => s.NIS === nis);
-  if (idx >= 0) Object.assign(siswaData[idx], newData);
-  const row = document.getElementById('siswa-row-' + nis);
-  if (!row) { loadSiswa(); return; }
-  const s = idx >= 0 ? siswaData[idx] : newData;
-  const statusClass = getStatusClass(s.Status);
-  const hb = formatHeartbeat(s.Last_Heartbeat);
-  const cells = row.querySelectorAll('td');
-  if (cells.length >= 6) {
-    cells[4].innerHTML = `<span class="status-badge ${statusClass}"><span class="dot"></span> ${esc(s.Status||'OFFLINE')}</span>`;
-    cells[5].innerHTML = `<span class="hb-text ${hb.cls}">${hb.text}</span>`;
-  }
-  row.classList.add('table-row-highlight');
-  setTimeout(() => row.classList.remove('table-row-highlight'), 1500);
-  updateOverviewStats();
+async function deleteSiswa(nis) {
+    if (!confirm('Hapus siswa ' + nis + '?')) return;
+    try {
+        const { error } = await sb.from('SISWA').delete().eq('NIS', nis);
+        if (error) throw error;
+        showToast('Siswa dihapus.', 'success');
+        loadSiswa();
+    } catch (e) { showToast('Gagal: ' + e.message, 'danger'); }
 }
 
-// ============ LOAD KECURANGAN ============
-async function loadKecurangan() {
-  try {
-    const { data, error } = await sb.from('KECURANGAN').select('id, NIS, Nama, Jenis, Timestamp').order('Timestamp', { ascending: false }).limit(500);
-    if (error) throw error;
-    kecuranganData = data || [];
-    renderKecurangan(kecuranganData);
-    renderRecentCheats(kecuranganData.slice(0, 5));
-    updateOverviewStats();
-  } catch (e) { showToast('Gagal memuat kecurangan: ' + e.message, 'error'); }
+async function kickSiswa(nis) {
+    if (!confirm('Kick siswa ' + nis + '?')) return;
+    try {
+        const { error } = await sb.from('SISWA').update({ Status: 'KICKED' }).eq('NIS', nis);
+        if (error) throw error;
+        showToast('Siswa di-kick.', 'warning');
+        loadSiswa();
+    } catch (e) { showToast('Gagal: ' + e.message, 'danger'); }
 }
 
-function renderKecurangan(list) {
-  const tbody = document.getElementById('cheatBody');
-  if (!list || !list.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><i class="bi bi-shield-check"></i>Tidak ada kecurangan</td></tr>';
-    document.getElementById('cheatFooter').textContent = 'Total: 0 record';
-    return;
-  }
-  tbody.innerHTML = list.map((c, i) => {
-    const badgeClass = getCheatBadgeClass(c.Jenis);
-    return `<tr><td>${i+1}</td><td class="text-nowrap">${formatTimestamp(c.Timestamp)}</td><td><code>${esc(c.NIS)}</code></td><td>${esc(c.Nama)}</td><td><span class="cheat-badge ${badgeClass}">${esc(c.Jenis)}</span></td></tr>`;
-  }).join('');
-  document.getElementById('cheatFooter').textContent = `Total: ${list.length} record`;
+async function blockSiswa(nis) {
+    if (!confirm('Block siswa ' + nis + '?')) return;
+    try {
+        const { error } = await sb.from('SISWA').update({ Status: 'BLOCKED' }).eq('NIS', nis);
+        if (error) throw error;
+        showToast('Siswa diblokir.', 'danger');
+        loadSiswa();
+    } catch (e) { showToast('Gagal: ' + e.message, 'danger'); }
 }
 
-function renderRecentCheats(list) {
-  const tbody = document.getElementById('recentCheatBody');
-  if (!list || !list.length) {
-    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4"><i class="bi bi-shield-check fs-3 d-block mb-2"></i>Belum ada kecurangan</td></tr>';
-    return;
-  }
-  tbody.innerHTML = list.map(c => {
-    const bc = getCheatBadgeClass(c.Jenis);
-    return `<tr><td class="text-nowrap small">${formatTimestamp(c.Timestamp)}</td><td><code class="small">${esc(c.NIS)}</code></td><td class="small">${esc(c.Nama)}</td><td><span class="cheat-badge ${bc}">${esc(c.Jenis)}</span></td></tr>`;
-  }).join('');
+async function activateSiswa(nis) {
+    try {
+        const { error } = await sb.from('SISWA').update({ Status: 'OFFLINE' }).eq('NIS', nis);
+        if (error) throw error;
+        showToast('Siswa diaktifkan kembali.', 'success');
+        loadSiswa();
+    } catch (e) { showToast('Gagal: ' + e.message, 'danger'); }
 }
 
-function filterKecurangan() {
-  const q = (document.getElementById('searchCheat').value || '').toLowerCase();
-  const j = document.getElementById('filterJenis').value;
-  const filtered = kecuranganData.filter(c => {
-    const ms = !q || (c.NIS||'').toLowerCase().includes(q) || (c.Nama||'').toLowerCase().includes(q);
-    const mj = !j || c.Jenis === j;
-    return ms && mj;
-  });
-  renderKecurangan(filtered);
+async function resetAllSiswa() {
+    if (!confirm('Reset semua status siswa ke OFFLINE?\nSiswa yang sedang ujian akan terdampak!')) return;
+    try {
+        const { error } = await sb.from('SISWA').update({ Status: 'OFFLINE', Last_Heartbeat: null }).neq('NIS', '');
+        if (error) throw error;
+        showToast('Semua status direset.', 'success');
+        loadSiswa();
+    } catch (e) { showToast('Gagal: ' + e.message, 'danger'); }
 }
 
-function prependCheatRow(record) {
-  kecuranganData.unshift(record);
-  renderKecurangan(kecuranganData);
-  renderRecentCheats(kecuranganData.slice(0, 5));
-  updateNavBadges();
-}
-
-// ============ LOAD HASIL ============
-async function loadHasil() {
-  try {
-    const { data, error } = await sb.from('HASIL').select('id, NIS, Nama, Sekolah, Mapel, Skor, Jawaban_benar, Jawaban_salah, Kosong, Waktu_selesai').order('Waktu_selesai', { ascending: false });
-    if (error) throw error;
-    hasilData = data || [];
-    renderHasil(hasilData);
-    updateHasilMapelFilter();
-    updateOverviewStats();
-  } catch (e) { showToast('Gagal memuat hasil: ' + e.message, 'error'); }
-}
-
-function renderHasil(list) {
-  const tbody = document.getElementById('hasilBody');
-  if (!list || !list.length) {
-    tbody.innerHTML = '<tr><td colspan="11" class="empty-state"><i class="bi bi-clipboard-x"></i>Belum ada hasil</td></tr>';
-    document.getElementById('hasilFooter').textContent = 'Total: 0 hasil';
-    return;
-  }
-  tbody.innerHTML = list.map((h, i) => `<tr>
-    <td>${i+1}</td><td><code>${esc(h.NIS)}</code></td><td>${esc(h.Nama)}</td><td>${esc(h.Sekolah||'-')}</td>
-    <td>${esc(h.Mapel||'-')}</td><td><span class="badge ${getSkorBadge(h.Skor)} fs-6">${h.Skor||0}</span></td>
-    <td class="text-success fw-semibold">${h.Jawaban_benar||0}</td><td class="text-danger fw-semibold">${h.Jawaban_salah||0}</td>
-    <td>${h.Kosong||0}</td><td class="small">${formatTimestamp(h.Waktu_selesai)}</td>
-    <td><button class="btn btn-outline-danger btn-sm" onclick="deleteHasil('${h.id}','${esc(h.NIS)}','${esc(h.Nama)}')"><i class="bi bi-trash3"></i></button></td>
-  </tr>`).join('');
-  document.getElementById('hasilFooter').textContent = `Total: ${list.length} hasil`;
-}
-
-function updateHasilMapelFilter() {
-  const sel = document.getElementById('filterMapelHasil');
-  const mapels = [...new Set(hasilData.map(h => h.Mapel).filter(Boolean))];
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">Semua Mapel</option>';
-  mapels.forEach(m => { sel.innerHTML += `<option value="${esc(m)}">${esc(m)}</option>`; });
-  sel.value = cur;
-}
-
-function filterHasil() {
-  const q = (document.getElementById('searchHasil').value || '').toLowerCase();
-  const m = document.getElementById('filterMapelHasil').value;
-  const filtered = hasilData.filter(h => {
-    const ms = !q || (h.NIS||'').toLowerCase().includes(q) || (h.Nama||'').toLowerCase().includes(q);
-    const mm = !m || h.Mapel === m;
-    return ms && mm;
-  });
-  renderHasil(filtered);
-}
-
-// ============ LOAD SOAL (Multi-type + Math) ============
+// ================================================================
+//                          TAB SOAL
+// ================================================================
 async function loadSoal() {
-  try {
-    const { data, error } = await sb.from('SOAL').select('No, Mapel, Tipe, Soal, Opsi_A, Opsi_B, Opsi_C, Opsi_D, Opsi_E, Kunci, Bobot, Gambar').order('No', { ascending: true });
-    if (error) throw error;
-    soalData = data || [];
-    renderSoal(soalData);
-    updateMapelFilter();
-    updateOverviewStats();
-  } catch (e) { showToast('Gagal memuat soal: ' + e.message, 'error'); }
+    try {
+        let query = sb.from('SOAL').select('*').order('Mapel').order('No', { ascending: true });
+        const filterMapel = document.getElementById('filterMapelSoal').value;
+        const filterTipe = document.getElementById('filterTipeSoal').value;
+        if (filterMapel) query = query.eq('Mapel', filterMapel);
+        if (filterTipe) query = query.eq('Tipe', filterTipe);
+
+        const { data, error } = await query;
+        if (error) throw error;
+        soalList = data || [];
+        renderSoal();
+    } catch (e) {
+        showToast('Gagal memuat soal: ' + e.message, 'danger');
+    }
 }
 
-function getTipeLabel(tipe) {
-  return { PG: 'Pilihan Ganda', BS: 'Benar/Salah', IS: 'Isian Singkat' }[tipe] || tipe || 'PG';
+function renderSoal() {
+    const tbody = document.getElementById('tbodySoal');
+    document.getElementById('badgeSoal').textContent = soalList.length;
+
+    if (!soalList.length) {
+        tbody.innerHTML = `<tr><td colspan="8">
+            <div class="empty-state">
+                <div class="empty-icon">📝</div>
+                <div class="empty-text">Belum ada soal</div>
+                <div class="empty-sub">Klik "Tambah Soal" untuk menambahkan</div>
+            </div></td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = soalList.map(s => {
+        const tipeMap = { PG: '🔘 PG', BS: '✅ B/S', IS: '✏️ Isian' };
+        const soalPreview = (s.Soal || '').substring(0, 60) + ((s.Soal || '').length > 60 ? '...' : '');
+        const imgHtml = s.Gambar ?
+            `<img src="${esc(s.Gambar)}" class="soal-img-thumb" alt="img" onerror="this.style.display='none'" title="Klik untuk memperbesar" onclick="window.open('${esc(s.Gambar)}','_blank')">` :
+            '<span class="text-muted small">-</span>';
+        return `<tr>
+            <td><strong>${s.No}</strong></td>
+            <td>${esc(s.Mapel)}</td>
+            <td>${tipeMap[s.Tipe] || s.Tipe}</td>
+            <td><span class="soal-text-preview">${esc(soalPreview)}</span></td>
+            <td>${imgHtml}</td>
+            <td><code>${esc(s.Kunci || '-')}</code></td>
+            <td>${s.Bobot || 1}</td>
+            <td class="text-center text-nowrap">
+                <button class="btn-action" onclick="openSoalModal(${s.No})" title="Edit"><i class="bi bi-pencil"></i></button>
+                <button class="btn-action danger" onclick="deleteSoal(${s.No})" title="Hapus"><i class="bi bi-trash"></i></button>
+            </td>
+        </tr>`;
+    }).join('');
 }
 
-function getTipeBadgeClass(tipe) {
-  return { PG: 'bg-primary', BS: 'bg-info', IS: 'bg-success' }[tipe] || 'bg-secondary';
-}
-
-function renderSoal(list) {
-  const tbody = document.getElementById('soalBody');
-  if (!list || !list.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><i class="bi bi-journal-x"></i>Belum ada soal</td></tr>';
-    document.getElementById('soalFooter').textContent = 'Total: 0 soal';
-    return;
-  }
-  tbody.innerHTML = list.map(s => {
-    const hasImg = s.Gambar ? `<a href="${esc(s.Gambar)}" target="_blank" class="btn btn-sm btn-outline-info"><i class="bi bi-image"></i></a>` : '-';
-    const tipe = s.Tipe || 'PG';
-    return `<tr>
-      <td><strong>${s.No}</strong></td>
-      <td><span class="badge bg-primary-subtle text-primary">${esc(s.Mapel)}</span></td>
-      <td><span class="badge ${getTipeBadgeClass(tipe)}">${getTipeLabel(tipe)}</span></td>
-      <td><span class="text-truncate-2 soal-cell">${esc(s.Soal)}</span></td>
-      <td><span class="badge bg-success">${esc(s.Kunci)}</span></td>
-      <td>${s.Bobot||1}</td>
-      <td>${hasImg}</td>
-      <td>
-        <div class="btn-group btn-group-sm">
-          <button class="btn btn-outline-primary btn-sm" onclick="editSoal(${s.No})" title="Edit"><i class="bi bi-pencil"></i></button>
-          <button class="btn btn-outline-danger btn-sm" onclick="deleteSoal(${s.No})" title="Hapus"><i class="bi bi-trash"></i></button>
-        </div>
-      </td>
-    </tr>`;
-  }).join('');
-  document.getElementById('soalFooter').textContent = `Total: ${list.length} soal`;
-
-  // Render math in soal cells
-  setTimeout(() => {
-    document.querySelectorAll('.soal-cell').forEach(el => renderMathIn(el));
-  }, 100);
-}
-
-function updateMapelFilter() {
-  const sel = document.getElementById('filterMapelSoal');
-  const mapels = [...new Set(soalData.map(s => s.Mapel).filter(Boolean))];
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">Semua Mapel</option>';
-  mapels.forEach(m => { sel.innerHTML += `<option value="${esc(m)}">${esc(m)}</option>`; });
-  sel.value = cur;
-}
-
-function filterSoal() {
-  const m = document.getElementById('filterMapelSoal').value;
-  const t = document.getElementById('filterTipeSoal').value;
-  const filtered = soalData.filter(s => {
-    return (!m || s.Mapel === m) && (!t || (s.Tipe||'PG') === t);
-  });
-  renderSoal(filtered);
-}
-
-// ============ SOAL MODAL (Add/Edit) ============
+// ============ SOAL MODAL ============
 function toggleSoalFields() {
-  const tipe = document.getElementById('soalTipe').value;
-  const pgFields = document.getElementById('pgFields');
-  const kunciInput = document.getElementById('soalKunci');
-  if (tipe === 'PG') {
-    pgFields.style.display = '';
-    kunciInput.placeholder = 'A / B / C / D / E';
-  } else if (tipe === 'BS') {
-    pgFields.style.display = 'none';
-    kunciInput.placeholder = 'Benar / Salah';
-  } else if (tipe === 'IS') {
-    pgFields.style.display = 'none';
-    kunciInput.placeholder = 'Jawaban singkat (teks)';
-  }
+    const tipe = document.getElementById('soalTipe').value;
+    document.getElementById('pgFields').style.display = tipe === 'PG' ? '' : 'none';
+    const kunci = document.getElementById('soalKunci');
+    if (tipe === 'BS') {
+        kunci.placeholder = 'Benar / Salah';
+    } else if (tipe === 'IS') {
+        kunci.placeholder = 'Jawaban teks';
+    } else {
+        kunci.placeholder = 'A / B / C / D / E';
+    }
 }
 
-function openSoalModal(editNo) {
-  const isEdit = !!editNo;
-  document.getElementById('soalModalTitle').innerHTML = isEdit 
-    ? '<i class="bi bi-pencil"></i> Edit Soal' 
-    : '<i class="bi bi-journal-plus"></i> Tambah Soal';
-  document.getElementById('soalEditNo').value = isEdit ? editNo : '';
-  
-  if (isEdit) {
-    const s = soalData.find(x => x.No === editNo);
-    if (!s) return;
-    document.getElementById('soalNo').value = s.No;
-    document.getElementById('soalNo').disabled = true;
-    document.getElementById('soalMapel').value = s.Mapel || 'Matematika';
-    document.getElementById('soalTipe').value = s.Tipe || 'PG';
-    document.getElementById('soalText').value = s.Soal || '';
-    document.getElementById('soalA').value = s.Opsi_A || '';
-    document.getElementById('soalB').value = s.Opsi_B || '';
-    document.getElementById('soalC').value = s.Opsi_C || '';
-    document.getElementById('soalD').value = s.Opsi_D || '';
-    document.getElementById('soalE').value = s.Opsi_E || '';
-    document.getElementById('soalKunci').value = s.Kunci || '';
-    document.getElementById('soalBobot').value = s.Bobot || 1;
-    document.getElementById('soalGambar').value = s.Gambar || '';
-  } else {
-    document.getElementById('soalNo').value = soalData.length ? Math.max(...soalData.map(x=>x.No)) + 1 : 1;
-    document.getElementById('soalNo').disabled = false;
+function openSoalModal(no) {
+    const isEdit = !!no;
+    document.getElementById('modalSoalTitle').textContent = isEdit ? 'Edit Soal' : 'Tambah Soal';
+    document.getElementById('soalEditNo').value = '';
+    document.getElementById('soalNo').value = '';
+    document.getElementById('soalMapel').value = 'Matematika';
     document.getElementById('soalTipe').value = 'PG';
     document.getElementById('soalText').value = '';
     document.getElementById('soalA').value = '';
@@ -669,347 +493,552 @@ function openSoalModal(editNo) {
     document.getElementById('soalD').value = '';
     document.getElementById('soalE').value = '';
     document.getElementById('soalKunci').value = '';
-    document.getElementById('soalBobot').value = 1;
+    document.getElementById('soalBobot').value = '1';
     document.getElementById('soalGambar').value = '';
-  }
-  
-  toggleSoalFields();
-  // Preview
-  const preview = document.getElementById('soalPreview');
-  preview.innerHTML = document.getElementById('soalText').value || 'Preview...';
-  renderMathIn(preview);
-  
-  soalModal.show();
-}
+    document.getElementById('soalGambarFile').value = '';
+    document.getElementById('soalGambarPreview').innerHTML = '';
+    document.getElementById('soalGambarUploadStatus').innerHTML = '';
+    document.getElementById('btnRemoveImg').classList.add('d-none');
 
-function editSoal(no) { openSoalModal(no); }
-
-async function saveSoal() {
-  const editNo = document.getElementById('soalEditNo').value;
-  const isEdit = !!editNo;
-  const no = parseInt(document.getElementById('soalNo').value);
-  const tipe = document.getElementById('soalTipe').value;
-
-  if (!no) { showToast('No soal wajib diisi', 'error'); return; }
-
-  const payload = {
-    No: no,
-    Mapel: document.getElementById('soalMapel').value,
-    Tipe: tipe,
-    Soal: document.getElementById('soalText').value,
-    Opsi_A: tipe === 'PG' ? document.getElementById('soalA').value : null,
-    Opsi_B: tipe === 'PG' ? document.getElementById('soalB').value : null,
-    Opsi_C: tipe === 'PG' ? document.getElementById('soalC').value : null,
-    Opsi_D: tipe === 'PG' ? document.getElementById('soalD').value : null,
-    Opsi_E: tipe === 'PG' ? document.getElementById('soalE').value : null,
-    Kunci: document.getElementById('soalKunci').value,
-    Bobot: parseInt(document.getElementById('soalBobot').value) || 1,
-    Gambar: document.getElementById('soalGambar').value || null
-  };
-
-  try {
     if (isEdit) {
-      const { error } = await sb.from('SOAL').update(payload).eq('No', parseInt(editNo));
-      if (error) throw error;
-      showToast('Soal diupdate!', 'success');
-    } else {
-      const { error } = await sb.from('SOAL').insert(payload);
-      if (error) throw error;
-      showToast('Soal ditambahkan!', 'success');
-    }
-    soalModal.hide();
-    loadSoal();
-  } catch (e) { showToast('Gagal: ' + e.message, 'error'); }
-}
+        const s = soalList.find(x => x.No === no);
+        if (s) {
+            document.getElementById('soalEditNo').value = s.No;
+            document.getElementById('soalNo').value = s.No;
+            document.getElementById('soalMapel').value = s.Mapel || 'Matematika';
+            document.getElementById('soalTipe').value = s.Tipe || 'PG';
+            document.getElementById('soalText').value = s.Soal || '';
+            document.getElementById('soalA').value = s.Opsi_A || '';
+            document.getElementById('soalB').value = s.Opsi_B || '';
+            document.getElementById('soalC').value = s.Opsi_C || '';
+            document.getElementById('soalD').value = s.Opsi_D || '';
+            document.getElementById('soalE').value = s.Opsi_E || '';
+            document.getElementById('soalKunci').value = s.Kunci || '';
+            document.getElementById('soalBobot').value = s.Bobot || 1;
+            document.getElementById('soalGambar').value = s.Gambar || '';
 
-function deleteSoal(no) {
-  showConfirm('🗑️', 'Hapus Soal', `Hapus soal No. ${no}?`, 'btn-danger', async () => {
-    await sb.from('SOAL').delete().eq('No', no);
-    showToast('Soal dihapus', 'success');
-    loadSoal();
-  });
-}
-
-// ============ OVERVIEW STATS ============
-function updateOverviewStats() {
-  const total = siswaData.length;
-  const online = siswaData.filter(s => (s.Status||'').toUpperCase() === 'ONLINE').length;
-  const selesai = siswaData.filter(s => (s.Status||'').toUpperCase() === 'SELESAI').length;
-  const blocked = siswaData.filter(s => ['BLOCKED','KICKED'].includes((s.Status||'').toUpperCase())).length;
-  document.getElementById('statTotal').textContent = total;
-  document.getElementById('statOnline').textContent = online;
-  document.getElementById('statSelesai').textContent = selesai;
-  document.getElementById('statBlocked').textContent = blocked;
-  document.getElementById('statKecurangan').textContent = kecuranganData.length;
-  document.getElementById('statSoal').textContent = soalData.length;
-  document.getElementById('statHasil').textContent = hasilData.length;
-  if (hasilData.length > 0) {
-    const avg = hasilData.reduce((sum, h) => sum + (h.Skor||0), 0) / hasilData.length;
-    document.getElementById('statRata').textContent = Math.round(avg);
-  } else { document.getElementById('statRata').textContent = '0'; }
-  updateNavBadges();
-}
-
-function updateNavBadges() {
-  const online = siswaData.filter(s => (s.Status||'').toUpperCase() === 'ONLINE').length;
-  document.getElementById('navOnlineCount').textContent = online;
-  document.getElementById('navCheatCount').textContent = kecuranganData.length;
-  const unread = peringatanData.filter(w => !w.Dibaca).length;
-  document.getElementById('navWarnCount').textContent = unread;
-}
-
-// ============ ACTIONS ============
-async function resetSiswaLogin(nis) {
-  try {
-    const { error } = await sb.from('SISWA').update({ Status: 'OFFLINE', Last_Heartbeat: null }).eq('NIS', nis);
-    if (error) throw error;
-    showToast(`Status ${nis} direset`, 'success');
-    updateSiswaRow(nis, { Status: 'OFFLINE', Last_Heartbeat: null });
-  } catch (e) { showToast('Gagal: ' + e.message, 'error'); }
-}
-
-function blockSiswa(nis, nama) {
-  showConfirm('🚫', 'Block Siswa', `Block "${nama}" (${nis})?`, 'btn-danger', async () => {
-    try {
-      await sb.from('SISWA').update({ Status: 'BLOCKED' }).eq('NIS', nis);
-      showToast(`${nama} diblokir`, 'warning');
-      updateSiswaRow(nis, { Status: 'BLOCKED' });
-    } catch (e) { showToast('Gagal: ' + e.message, 'error'); }
-  });
-}
-
-async function resetAllStatus() {
-  showConfirm('🔄', 'Reset Semua Status', 'Reset SEMUA siswa ke OFFLINE?', 'btn-warning', async () => {
-    try {
-      await sb.from('SISWA').update({ Status: 'OFFLINE', Last_Heartbeat: null }).neq('Status', '__never__');
-      showToast('Semua status direset', 'success');
-      await loadSiswa();
-    } catch (e) { showToast('Gagal: ' + e.message, 'error'); }
-  });
-}
-
-function deleteHasil(id, nis, nama) {
-  showConfirm('🗑️', 'Reset Ujian', `Hapus hasil "${nama}"?`, 'btn-danger', async () => {
-    await sb.from('HASIL').delete().eq('id', id);
-    await sb.from('SISWA').update({ Status: 'OFFLINE' }).eq('NIS', nis);
-    showToast(`Hasil ${nama} dihapus`, 'success');
-    await loadHasil(); await loadSiswa();
-  });
-}
-
-function confirmResetKecurangan() {
-  showConfirm('⚠️', 'Reset Kecurangan', 'Hapus semua log?', 'btn-danger', async () => {
-    await sb.from('KECURANGAN').delete().neq('NIS', '__never__');
-    kecuranganData = []; renderKecurangan([]); renderRecentCheats([]);
-    updateOverviewStats(); showToast('Semua kecurangan dihapus', 'success');
-  });
-}
-
-function confirmResetHasil() {
-  showConfirm('⚠️', 'Reset Semua Hasil', 'Hapus semua hasil?', 'btn-danger', async () => {
-    await sb.from('HASIL').delete().neq('NIS', '__never__');
-    hasilData = []; renderHasil([]); updateOverviewStats();
-    showToast('Semua hasil dihapus', 'success');
-  });
-}
-
-// ============ EXPORT EXCEL ============
-function exportToExcel(data, filename, sheetName) {
-  if (!data || !data.length) { showToast('Tidak ada data untuk diexport', 'error'); return; }
-  const ws = XLSX.utils.json_to_sheet(data);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, sheetName || 'Sheet1');
-  XLSX.writeFile(wb, filename);
-  showToast(`File ${filename} berhasil didownload`, 'success');
-}
-
-function exportSiswaExcel() {
-  const data = siswaData.map(s => ({
-    NIS: s.NIS, Nama: s.Nama, Sekolah: s.Sekolah, Status: s.Status,
-    Last_Heartbeat: s.Last_Heartbeat ? new Date(s.Last_Heartbeat).toLocaleString('id-ID') : '-'
-  }));
-  exportToExcel(data, 'siswa_cbt.xlsx', 'Siswa');
-}
-
-function exportKecuranganExcel() {
-  const data = kecuranganData.map(c => ({
-    Waktu: c.Timestamp ? new Date(c.Timestamp).toLocaleString('id-ID') : '-',
-    NIS: c.NIS, Nama: c.Nama, Jenis: c.Jenis
-  }));
-  exportToExcel(data, 'kecurangan_cbt.xlsx', 'Kecurangan');
-}
-
-function exportHasilExcel() {
-  const data = hasilData.map(h => ({
-    NIS: h.NIS, Nama: h.Nama, Sekolah: h.Sekolah, Mapel: h.Mapel,
-    Skor: h.Skor, Benar: h.Jawaban_benar, Salah: h.Jawaban_salah, Kosong: h.Kosong || 0,
-    Waktu_Selesai: h.Waktu_selesai ? new Date(h.Waktu_selesai).toLocaleString('id-ID') : '-'
-  }));
-  exportToExcel(data, 'hasil_ujian_cbt.xlsx', 'Hasil');
-}
-
-function exportSoalExcel() {
-  const data = soalData.map(s => ({
-    No: s.No, Mapel: s.Mapel, Tipe: s.Tipe || 'PG', Soal: s.Soal,
-    Opsi_A: s.Opsi_A, Opsi_B: s.Opsi_B, Opsi_C: s.Opsi_C, Opsi_D: s.Opsi_D, Opsi_E: s.Opsi_E,
-    Kunci: s.Kunci, Bobot: s.Bobot, Gambar: s.Gambar
-  }));
-  exportToExcel(data, 'bank_soal_cbt.xlsx', 'Soal');
-}
-
-function exportPeringatanExcel() {
-  const data = peringatanData.map(w => ({
-    Waktu: w.Timestamp ? new Date(w.Timestamp).toLocaleString('id-ID') : '-',
-    NIS: w.NIS, Nama: w.Nama, Level: w.Level, Pesan: w.Pesan, Dibaca: w.Dibaca ? 'Ya' : 'Belum'
-  }));
-  exportToExcel(data, 'peringatan_cbt.xlsx', 'Peringatan');
-}
-
-// ============ SUPABASE REALTIME ============
-function subscribeRealtime() {
-  unsubscribeRealtime();
-  realtimeChannel = sb.channel('admin-dashboard-v2');
-
-  realtimeChannel.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'SISWA' }, (payload) => {
-    const nd = payload.new;
-    const idx = siswaData.findIndex(s => s.NIS === nd.NIS);
-    if (idx >= 0) { siswaData[idx] = { ...siswaData[idx], ...nd }; updateSiswaRow(nd.NIS, nd); }
-    else loadSiswa();
-  });
-
-  realtimeChannel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'KECURANGAN' }, (payload) => {
-    prependCheatRow(payload.new);
-    updateOverviewStats();
-    playAlertSound();
-    showToast(`⚠️ ${payload.new.Nama}: ${payload.new.Jenis}`, 'warning');
-    if (Notification.permission === 'granted') {
-      new Notification('Kecurangan!', { body: `${payload.new.Nama} — ${payload.new.Jenis}` });
-    }
-  });
-
-  realtimeChannel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'HASIL' }, (payload) => {
-    hasilData.unshift(payload.new);
-    renderHasil(hasilData);
-    updateOverviewStats();
-    showToast(`✅ ${payload.new.Nama} telah submit`, 'info');
-  });
-
-  realtimeChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'PERINGATAN' }, () => {
-    loadPeringatan();
-  });
-
-  realtimeChannel.subscribe((status) => {
-    const dot = document.getElementById('realtimeDot');
-    if (status === 'SUBSCRIBED') { dot.classList.add('connected'); dot.title = 'Connected'; }
-    else { dot.classList.remove('connected'); dot.title = 'Disconnected'; }
-  });
-
-  if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
-}
-
-function unsubscribeRealtime() {
-  if (realtimeChannel) { sb.removeChannel(realtimeChannel); realtimeChannel = null; }
-  const dot = document.getElementById('realtimeDot');
-  if (dot) dot.classList.remove('connected');
-}
-
-// ============ HELPERS ============
-function esc(str) { if (!str) return ''; const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
-function trunc(s, n) { if (!s) return ''; return s.length > n ? s.substring(0, n) + '...' : s; }
-
-function getStatusClass(status) {
-  switch ((status||'').toUpperCase()) {
-    case 'ONLINE': return 'online'; case 'SELESAI': return 'selesai';
-    case 'BLOCKED': return 'blocked'; case 'KICKED': return 'kicked';
-    default: return 'offline';
-  }
-}
-
-function getCheatBadgeClass(jenis) {
-  if (!jenis) return 'default';
-  const j = jenis.toLowerCase();
-  if (j.includes('tab')||j.includes('ganti')) return 'tab';
-  if (j.includes('focus')) return 'focus';
-  if (j.includes('fullscreen')||j.includes('keluar')) return 'fullscreen';
-  if (j.includes('keyboard')||j.includes('shortcut')) return 'keyboard';
-  if (j.includes('devtools')||j.includes('dev')) return 'devtools';
-  if (j.includes('mouse')) return 'mouse';
-  if (j.includes('klik')||j.includes('click')) return 'click';
-  if (j.includes('screenshot')) return 'screenshot';
-  return 'default';
-}
-
-function getSkorBadge(skor) {
-  if (!skor && skor !== 0) return 'bg-secondary';
-  if (skor >= 80) return 'bg-success'; if (skor >= 60) return 'bg-primary';
-  if (skor >= 40) return 'bg-warning text-dark'; return 'bg-danger';
-}
-
-function formatTimestamp(ts) {
-  if (!ts) return '-';
-  try {
-    const d = new Date(ts);
-    return isNaN(d.getTime()) ? ts : d.toLocaleString('id-ID', { day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit' });
-  } catch (e) { return ts; }
-}
-
-function formatHeartbeat(ts) {
-  if (!ts) return { text: 'Belum pernah', cls: '' };
-  try {
-    const d = new Date(ts);
-    if (isNaN(d.getTime())) return { text: '-', cls: '' };
-    const diff = Math.floor((Date.now() - d.getTime()) / 1000);
-    if (diff < 60) return { text: `${diff}s lalu`, cls: 'recent' };
-    if (diff < 3600) return { text: `${Math.floor(diff/60)}m lalu`, cls: diff < 120 ? 'recent' : '' };
-    return { text: d.toLocaleTimeString('id-ID'), cls: 'stale' };
-  } catch (e) { return { text: '-', cls: '' }; }
-}
-
-// ============ CONFIRMATION MODAL ============
-function showConfirm(icon, title, msg, btnClass, onConfirm) {
-  document.getElementById('confirmIcon').textContent = icon;
-  document.getElementById('confirmTitle').textContent = title;
-  document.getElementById('confirmMsg').textContent = msg;
-  const btn = document.getElementById('confirmBtn');
-  btn.className = `btn btn-sm px-4 ${btnClass || 'btn-danger'}`;
-  btn.textContent = 'Ya, Lanjutkan';
-  btn.onclick = () => { confirmModal.hide(); if (onConfirm) onConfirm(); };
-  confirmModal.show();
-}
-
-// ============ TOAST ============
-function showToast(message, type) {
-  const container = document.getElementById('toastContainer');
-  const id = 'toast-' + Date.now();
-  const bgClass = { success:'bg-success', error:'bg-danger', warning:'bg-warning text-dark', info:'bg-primary' }[type] || 'bg-primary';
-  const iconMap = { success:'bi-check-circle-fill', error:'bi-x-circle-fill', warning:'bi-exclamation-triangle-fill', info:'bi-info-circle-fill' };
-  container.insertAdjacentHTML('beforeend', `
-    <div id="${id}" class="toast align-items-center text-white ${bgClass} border-0" role="alert" data-bs-autohide="true" data-bs-delay="4000">
-      <div class="d-flex"><div class="toast-body"><i class="bi ${iconMap[type]||'bi-info-circle-fill'} me-1"></i>${esc(message)}</div>
-      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>
-    </div>`);
-  const el = document.getElementById(id);
-  const bsToast = new bootstrap.Toast(el);
-  bsToast.show();
-  el.addEventListener('hidden.bs.toast', () => el.remove());
-}
-
-function playAlertSound() {
-  try { const a = document.getElementById('alertSound'); if (a) { a.currentTime = 0; a.play().catch(()=>{}); } } catch(e) {}
-}
-
-// Periodic heartbeat refresh
-setInterval(() => {
-  if (siswaData.length > 0) {
-    siswaData.forEach(s => {
-      const row = document.getElementById('siswa-row-' + s.NIS);
-      if (row) {
-        const cells = row.querySelectorAll('td');
-        if (cells.length >= 6) {
-          const hb = formatHeartbeat(s.Last_Heartbeat);
-          cells[5].innerHTML = `<span class="hb-text ${hb.cls}">${hb.text}</span>`;
+            // Show existing image
+            if (s.Gambar && s.Gambar.trim()) {
+                document.getElementById('soalGambarPreview').innerHTML = `
+                    <img src="${esc(s.Gambar)}" style="max-width:100%;max-height:150px;border-radius:8px;border:1px solid var(--border)">
+                    <div class="small text-muted mt-1">Gambar saat ini — pilih file baru untuk mengganti</div>`;
+                document.getElementById('btnRemoveImg').classList.remove('d-none');
+            }
         }
-      }
+    } else {
+        // Auto-fill next number
+        const maxNo = soalList.reduce((max, s) => Math.max(max, s.No || 0), 0);
+        document.getElementById('soalNo').value = maxNo + 1;
+    }
+
+    toggleSoalFields();
+    soalModal.show();
+}
+
+// ============ IMAGE UPLOAD (ImgBB) ============
+function previewSoalImage(event) {
+    const file = event.target.files[0];
+    const preview = document.getElementById('soalGambarPreview');
+    const removeBtn = document.getElementById('btnRemoveImg');
+
+    if (!file) {
+        preview.innerHTML = '';
+        removeBtn.classList.add('d-none');
+        return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+        showToast('File harus berupa gambar!', 'warning');
+        event.target.value = '';
+        return;
+    }
+
+    if (file.size > 32 * 1024 * 1024) {
+        showToast('Ukuran file maksimal 32MB!', 'warning');
+        event.target.value = '';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        preview.innerHTML = `<img src="${e.target.result}">`;
+        removeBtn.classList.remove('d-none');
+    };
+    reader.readAsDataURL(file);
+}
+
+function removeSoalImage() {
+    document.getElementById('soalGambarFile').value = '';
+    document.getElementById('soalGambar').value = '';
+    document.getElementById('soalGambarPreview').innerHTML = '';
+    document.getElementById('soalGambarUploadStatus').innerHTML = '';
+    document.getElementById('btnRemoveImg').classList.add('d-none');
+}
+
+async function uploadToImgBB(file) {
+    const statusEl = document.getElementById('soalGambarUploadStatus');
+    statusEl.innerHTML = '<span class="text-primary"><i class="bi bi-cloud-upload me-1"></i>Mengupload gambar...</span>';
+
+    const formData = new FormData();
+    formData.append('image', file);
+    formData.append('key', IMGBB_API_KEY);
+
+    try {
+        const response = await fetch('https://api.imgbb.com/1/upload', {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            // Use original quality URL (not thumbnail)
+            const imageUrl = result.data.image.url;
+            document.getElementById('soalGambar').value = imageUrl;
+            statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>Upload berhasil!</span>';
+            return imageUrl;
+        } else {
+            throw new Error(result.error?.message || 'Upload gagal');
+        }
+    } catch (e) {
+        statusEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Gagal: ${e.message}</span>`;
+        throw e;
+    }
+}
+
+// ============ SAVE SOAL ============
+async function saveSoal() {
+    const editNo = document.getElementById('soalEditNo').value;
+    const isEdit = !!editNo;
+    const no = parseInt(document.getElementById('soalNo').value);
+    const tipe = document.getElementById('soalTipe').value;
+
+    if (!no) { showToast('No soal wajib diisi!', 'warning'); return; }
+    if (!document.getElementById('soalText').value.trim()) { showToast('Soal wajib diisi!', 'warning'); return; }
+    if (!document.getElementById('soalKunci').value.trim()) { showToast('Kunci jawaban wajib diisi!', 'warning'); return; }
+
+    // Disable button during save
+    const btnSave = document.getElementById('btnSaveSoal');
+    btnSave.disabled = true;
+    btnSave.innerHTML = '<span class="spinner-grow spinner-grow-sm me-1"></span> Menyimpan...';
+
+    // Handle image upload
+    let gambarUrl = document.getElementById('soalGambar').value || null;
+    const fileInput = document.getElementById('soalGambarFile');
+
+    if (fileInput.files && fileInput.files[0]) {
+        try {
+            gambarUrl = await uploadToImgBB(fileInput.files[0]);
+        } catch (e) {
+            showToast('Upload gambar gagal: ' + e.message, 'danger');
+            btnSave.disabled = false;
+            btnSave.innerHTML = '<i class="bi bi-check-lg me-1"></i> Simpan';
+            return;
+        }
+    }
+
+    const payload = {
+        No: no,
+        Mapel: document.getElementById('soalMapel').value,
+        Tipe: tipe,
+        Soal: document.getElementById('soalText').value,
+        Opsi_A: tipe === 'PG' ? document.getElementById('soalA').value : null,
+        Opsi_B: tipe === 'PG' ? document.getElementById('soalB').value : null,
+        Opsi_C: tipe === 'PG' ? document.getElementById('soalC').value : null,
+        Opsi_D: tipe === 'PG' ? document.getElementById('soalD').value : null,
+        Opsi_E: tipe === 'PG' ? document.getElementById('soalE').value : null,
+        Kunci: document.getElementById('soalKunci').value,
+        Bobot: parseInt(document.getElementById('soalBobot').value) || 1,
+        Gambar: gambarUrl
+    };
+
+    try {
+        if (isEdit) {
+            const { error } = await sb.from('SOAL').update(payload).eq('No', parseInt(editNo));
+            if (error) throw error;
+            showToast('Soal berhasil diupdate!', 'success');
+        } else {
+            const { error } = await sb.from('SOAL').insert(payload);
+            if (error) throw error;
+            showToast('Soal berhasil ditambahkan!', 'success');
+        }
+        soalModal.hide();
+        loadSoal();
+    } catch (e) {
+        showToast('Gagal: ' + e.message, 'danger');
+    } finally {
+        btnSave.disabled = false;
+        btnSave.innerHTML = '<i class="bi bi-check-lg me-1"></i> Simpan';
+    }
+}
+
+async function deleteSoal(no) {
+    if (!confirm('Hapus soal No.' + no + '?')) return;
+    try {
+        const { error } = await sb.from('SOAL').delete().eq('No', no);
+        if (error) throw error;
+        showToast('Soal dihapus.', 'success');
+        loadSoal();
+    } catch (e) { showToast('Gagal: ' + e.message, 'danger'); }
+}
+
+async function deleteAllSoal() {
+    const mapel = document.getElementById('filterMapelSoal').value;
+    const label = mapel || 'SEMUA MAPEL';
+    if (!confirm('Hapus semua soal ' + label + '?\nAksi ini tidak dapat dibatalkan!')) return;
+    if (!confirm('YAKIN? Semua soal ' + label + ' akan dihapus permanen!')) return;
+
+    try {
+        let query = sb.from('SOAL').delete();
+        if (mapel) query = query.eq('Mapel', mapel);
+        else query = query.neq('No', 0); // delete all
+        const { error } = await query;
+        if (error) throw error;
+        showToast('Semua soal ' + label + ' dihapus.', 'success');
+        loadSoal();
+    } catch (e) { showToast('Gagal: ' + e.message, 'danger'); }
+}
+
+// ================================================================
+//                       TAB PENGATURAN
+// ================================================================
+async function loadPengaturan() {
+    const container = document.getElementById('pengaturanCards');
+    let html = '';
+
+    for (const m of MAPEL_LIST) {
+        try {
+            const { data } = await sb.from('PENGATURAN')
+                .select('*').eq('Mapel', m.nama).maybeSingle();
+
+            const p = data || { Mapel: m.nama, Status_ujian: 'BELUM', Durasi_menit: 90, Acak_soal: true };
+            const statusClass = p.Status_ujian === 'AKTIF' ? 'aktif' :
+                                p.Status_ujian === 'SELESAI' ? 'selesai-uj' : 'belum';
+            const statusLabel = p.Status_ujian === 'AKTIF' ? '🟢 AKTIF' :
+                                p.Status_ujian === 'SELESAI' ? '🔵 SELESAI' : '⚪ BELUM';
+
+            html += `
+            <div class="pengaturan-card">
+                <div class="mapel-title">
+                    <span style="font-size:20px">${m.icon}</span> ${m.nama}
+                    <span class="status-ujian ${statusClass} ms-auto">${statusLabel}</span>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small fw-semibold mb-1">Durasi (menit)</label>
+                    <input type="number" class="form-control form-control-sm" value="${p.Durasi_menit || 90}"
+                        id="durasi_${m.nama}" min="1" max="600">
+                </div>
+                <div class="mb-2 form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="acak_${m.nama}" ${p.Acak_soal !== false ? 'checked' : ''}>
+                    <label class="form-check-label small" for="acak_${m.nama}">Acak Soal</label>
+                </div>
+                <div class="d-flex flex-wrap gap-1">
+                    <button class="btn btn-sm btn-outline-primary" onclick="savePengaturan('${m.nama}')">
+                        <i class="bi bi-save me-1"></i>Simpan
+                    </button>
+                    ${p.Status_ujian !== 'AKTIF' ?
+                        `<button class="btn btn-sm btn-success" onclick="setUjianStatus('${m.nama}','AKTIF')">
+                            <i class="bi bi-play me-1"></i>Mulai
+                        </button>` :
+                        `<button class="btn btn-sm btn-danger" onclick="setUjianStatus('${m.nama}','SELESAI')">
+                            <i class="bi bi-stop me-1"></i>Akhiri
+                        </button>`
+                    }
+                    ${p.Status_ujian === 'SELESAI' ?
+                        `<button class="btn btn-sm btn-outline-secondary" onclick="setUjianStatus('${m.nama}','BELUM')">
+                            <i class="bi bi-arrow-counterclockwise me-1"></i>Reset
+                        </button>` : ''
+                    }
+                </div>
+            </div>`;
+        } catch (e) {
+            html += `<div class="pengaturan-card"><p class="text-danger">Error: ${e.message}</p></div>`;
+        }
+    }
+
+    container.innerHTML = html;
+}
+
+async function savePengaturan(mapel) {
+    const durasi = parseInt(document.getElementById('durasi_' + mapel).value) || 90;
+    const acak = document.getElementById('acak_' + mapel).checked;
+
+    try {
+        // Upsert
+        const { data: existing } = await sb.from('PENGATURAN').select('id').eq('Mapel', mapel).maybeSingle();
+        if (existing) {
+            const { error } = await sb.from('PENGATURAN').update({
+                Durasi_menit: durasi, Acak_soal: acak
+            }).eq('Mapel', mapel);
+            if (error) throw error;
+        } else {
+            const { error } = await sb.from('PENGATURAN').insert({
+                Mapel: mapel, Durasi_menit: durasi, Acak_soal: acak, Status_ujian: 'BELUM'
+            });
+            if (error) throw error;
+        }
+        showToast('Pengaturan ' + mapel + ' disimpan!', 'success');
+        loadPengaturan();
+    } catch (e) { showToast('Gagal: ' + e.message, 'danger'); }
+}
+
+async function setUjianStatus(mapel, status) {
+    const action = status === 'AKTIF' ? 'memulai' : status === 'SELESAI' ? 'mengakhiri' : 'mereset';
+    if (!confirm('Yakin ' + action + ' ujian ' + mapel + '?')) return;
+
+    try {
+        const payload = { Status_ujian: status };
+        if (status === 'AKTIF') {
+            const durasi = parseInt(document.getElementById('durasi_' + mapel).value) || 90;
+            const now = new Date();
+            const end = new Date(now.getTime() + durasi * 60000);
+            payload.Waktu_mulai = now.toISOString();
+            payload.Waktu_selesai = end.toISOString();
+            payload.Durasi_menit = durasi;
+            payload.Acak_soal = document.getElementById('acak_' + mapel).checked;
+        }
+        if (status === 'BELUM') {
+            payload.Waktu_mulai = null;
+            payload.Waktu_selesai = null;
+        }
+
+        const { data: existing } = await sb.from('PENGATURAN').select('id').eq('Mapel', mapel).maybeSingle();
+        if (existing) {
+            const { error } = await sb.from('PENGATURAN').update(payload).eq('Mapel', mapel);
+            if (error) throw error;
+        } else {
+            payload.Mapel = mapel;
+            payload.Durasi_menit = payload.Durasi_menit || 90;
+            payload.Acak_soal = payload.Acak_soal !== undefined ? payload.Acak_soal : true;
+            const { error } = await sb.from('PENGATURAN').insert(payload);
+            if (error) throw error;
+        }
+
+        showToast('Ujian ' + mapel + ' → ' + status, 'success');
+        loadPengaturan();
+    } catch (e) { showToast('Gagal: ' + e.message, 'danger'); }
+}
+
+// ============ WARNING SYSTEM ============
+function updateWarnTargets() {
+    const sel = document.getElementById('warnTarget');
+    const onlineSiswa = siswaList.filter(s => (s.Status || '').toUpperCase() === 'ONLINE');
+    sel.innerHTML = `<option value="">— Semua Siswa Online (${onlineSiswa.length}) —</option>` +
+        onlineSiswa.map(s => `<option value="${esc(s.NIS)}">${esc(s.NIS)} — ${esc(s.Nama)}</option>`).join('');
+}
+
+async function sendWarning() {
+    const target = document.getElementById('warnTarget').value;
+    const level = document.getElementById('warnLevel').value;
+    const pesan = document.getElementById('warnMsg').value.trim();
+
+    if (!pesan) { showToast('Tulis pesan peringatan!', 'warning'); return; }
+
+    try {
+        if (target) {
+            // Send to one siswa
+            const { error } = await sb.from('PERINGATAN').insert({
+                NIS: target, Level: level, Pesan: pesan,
+                Dibaca: false, Timestamp: new Date().toISOString()
+            });
+            if (error) throw error;
+            showToast('Peringatan dikirim ke ' + target, 'success');
+        } else {
+            // Send to all online
+            const onlineSiswa = siswaList.filter(s => (s.Status || '').toUpperCase() === 'ONLINE');
+            if (!onlineSiswa.length) { showToast('Tidak ada siswa online!', 'warning'); return; }
+
+            const rows = onlineSiswa.map(s => ({
+                NIS: s.NIS, Level: level, Pesan: pesan,
+                Dibaca: false, Timestamp: new Date().toISOString()
+            }));
+            const { error } = await sb.from('PERINGATAN').insert(rows);
+            if (error) throw error;
+            showToast('Peringatan dikirim ke ' + onlineSiswa.length + ' siswa!', 'success');
+        }
+        document.getElementById('warnMsg').value = '';
+    } catch (e) { showToast('Gagal: ' + e.message, 'danger'); }
+}
+
+// ================================================================
+//                         TAB HASIL
+// ================================================================
+async function loadHasil() {
+    try {
+        let query = sb.from('HASIL').select('*').order('Waktu_selesai', { ascending: false });
+        const filterMapel = document.getElementById('filterMapelHasil').value;
+        if (filterMapel) query = query.eq('Mapel', filterMapel);
+
+        const { data, error } = await query;
+        if (error) throw error;
+        hasilList = data || [];
+        renderHasil();
+    } catch (e) { showToast('Gagal memuat hasil: ' + e.message, 'danger'); }
+}
+
+function renderHasil() {
+    const tbody = document.getElementById('tbodyHasil');
+    document.getElementById('badgeHasil').textContent = hasilList.length;
+
+    if (!hasilList.length) {
+        tbody.innerHTML = `<tr><td colspan="11">
+            <div class="empty-state">
+                <div class="empty-icon">📊</div>
+                <div class="empty-text">Belum ada hasil ujian</div>
+            </div></td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = hasilList.map(h => {
+        return `<tr>
+            <td><code>${esc(h.NIS)}</code></td>
+            <td class="fw-semibold">${esc(h.Nama)}</td>
+            <td class="text-muted">${esc(h.Sekolah || '-')}</td>
+            <td>${esc(h.Mapel)}</td>
+            <td><strong class="text-primary">${h.Skor || 0}</strong></td>
+            <td class="text-success">${h.Jawaban_benar || 0}</td>
+            <td class="text-danger">${h.Jawaban_salah || 0}</td>
+            <td class="text-muted">${h.Kosong || 0}</td>
+            <td class="small">${formatDateTime(h.Waktu_mulai)}</td>
+            <td class="small">${formatDateTime(h.Waktu_selesai)}</td>
+            <td class="text-center text-nowrap">
+                <button class="btn-action" onclick="showDetailHasil(${h.id})" title="Detail">
+                    <i class="bi bi-eye"></i>
+                </button>
+                <button class="btn-action danger" onclick="deleteHasil(${h.id})" title="Hapus">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function showDetailHasil(id) {
+    const h = hasilList.find(x => x.id === id);
+    if (!h) return;
+    const body = document.getElementById('detailHasilBody');
+    const rinci = h.Jawaban_rinci || {};
+
+    let html = `
+        <div class="mb-3">
+            <strong>${esc(h.Nama)}</strong> (${esc(h.NIS)}) — ${esc(h.Mapel)}<br>
+            <span class="text-muted small">Skor: <strong>${h.Skor}</strong> | Benar: ${h.Jawaban_benar} | Salah: ${h.Jawaban_salah} | Kosong: ${h.Kosong}</span>
+        </div>
+        <table class="table table-sm table-bordered">
+            <thead><tr><th>No</th><th>Jawaban Siswa</th></tr></thead>
+            <tbody>`;
+
+    const keys = Object.keys(rinci).sort((a,b) => parseInt(a) - parseInt(b));
+    keys.forEach(no => {
+        const ans = rinci[no] || '-';
+        html += `<tr><td>${no}</td><td><code>${esc(ans)}</code></td></tr>`;
     });
-  }
-}, 30000);
+
+    html += '</tbody></table>';
+    body.innerHTML = html;
+    detailHasilModal.show();
+}
+
+async function deleteHasil(id) {
+    if (!confirm('Hapus hasil ini?')) return;
+    try {
+        const { error } = await sb.from('HASIL').delete().eq('id', id);
+        if (error) throw error;
+        showToast('Hasil dihapus.', 'success');
+        loadHasil();
+    } catch (e) { showToast('Gagal: ' + e.message, 'danger'); }
+}
+
+async function deleteAllHasil() {
+    const mapel = document.getElementById('filterMapelHasil').value;
+    const label = mapel || 'SEMUA';
+    if (!confirm('Hapus semua hasil ' + label + '?\nAksi ini TIDAK DAPAT dibatalkan!')) return;
+    if (!confirm('KONFIRMASI TERAKHIR: Hapus permanen?')) return;
+    try {
+        let query = sb.from('HASIL').delete();
+        if (mapel) query = query.eq('Mapel', mapel);
+        else query = query.neq('id', 0);
+        const { error } = await query;
+        if (error) throw error;
+        showToast('Semua hasil ' + label + ' dihapus.', 'success');
+        loadHasil();
+    } catch (e) { showToast('Gagal: ' + e.message, 'danger'); }
+}
+
+function exportHasil() {
+    if (!hasilList.length) { showToast('Tidak ada data untuk diexport.', 'warning'); return; }
+
+    const headers = ['NIS','Nama','Sekolah','Mapel','Skor','Benar','Salah','Kosong','Waktu_Mulai','Waktu_Selesai'];
+    const rows = hasilList.map(h => [
+        h.NIS, h.Nama, h.Sekolah || '', h.Mapel,
+        h.Skor || 0, h.Jawaban_benar || 0, h.Jawaban_salah || 0, h.Kosong || 0,
+        h.Waktu_mulai || '', h.Waktu_selesai || ''
+    ]);
+
+    let csv = '\uFEFF'; // BOM for Excel
+    csv += headers.join(',') + '\n';
+    rows.forEach(r => {
+        csv += r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',') + '\n';
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'Hasil_CBT_' + new Date().toISOString().slice(0,10) + '.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('CSV berhasil didownload!', 'success');
+}
+
+// ================================================================
+//                       TAB KECURANGAN
+// ================================================================
+async function loadCheat() {
+    try {
+        const { data, error } = await sb.from('KECURANGAN')
+            .select('*').order('Timestamp', { ascending: false }).limit(200);
+        if (error) throw error;
+        cheatList = data || [];
+        renderCheat();
+    } catch (e) { showToast('Gagal memuat log: ' + e.message, 'danger'); }
+}
+
+function renderCheat() {
+    const tbody = document.getElementById('tbodyCheat');
+    document.getElementById('badgeCheat').textContent = cheatList.length;
+
+    if (!cheatList.length) {
+        tbody.innerHTML = `<tr><td colspan="5">
+            <div class="empty-state">
+                <div class="empty-icon">🛡️</div>
+                <div class="empty-text">Belum ada pelanggaran</div>
+                <div class="empty-sub">Semua siswa berperilaku baik 👍</div>
+            </div></td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = cheatList.map(c => {
+        const jenis = (c.Jenis || '').toLowerCase();
+        const rowClass = jenis.includes('devtools') || jenis.includes('screenshot') || jenis.includes('split') ?
+            'cheat-row-high' :
+            jenis.includes('ganti tab') || jenis.includes('focus') ? 'cheat-row-mid' : '';
+        return `<tr class="${rowClass}">
+            <td class="small text-nowrap">${formatDateTime(c.Timestamp)}</td>
+            <td><code>${esc(c.NIS)}</code></td>
+            <td class="fw-semibold">${esc(c.Nama)}</td>
+            <td><span class="badge bg-danger bg-opacity-10 text-danger">${esc(c.Jenis)}</span></td>
+            <td class="small">${esc(c.Detail || '-')}</td>
+        </tr>`;
+    }).join('');
+}
+
+async function clearAllCheat() {
+    if (!confirm('Hapus semua log kecurangan?\nAksi ini tidak dapat dibatalkan!')) return;
+    try {
+        const { error } = await sb.from('KECURANGAN').delete().neq('id', 0);
+        if (error) throw error;
+        showToast('Semua log dihapus.', 'success');
+        loadCheat();
+    } catch (e) { showToast('Gagal: ' + e.message, 'danger'); }
+}
