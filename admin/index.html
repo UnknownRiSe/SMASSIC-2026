@@ -1,458 +1,548 @@
 <!DOCTYPE html>
 <html lang="id" data-bs-theme="light">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CBT SMASSIC 2026 — Panel Pengawas</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="style.css" rel="stylesheet">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Panel Pengawas - CBT SMASSIC 2026</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <!-- KaTeX for math rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <!-- SheetJS for Excel export -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
-<!-- ============ LOGIN ============ -->
-<div id="loginSection">
-    <div class="login-container">
-        <div class="login-card">
-            <div class="login-header">
-                <div class="login-icon">🛡️</div>
-                <h4 class="fw-bold mb-1">Panel Pengawas</h4>
-                <p class="text-muted small mb-0">CBT SMASSIC 2026</p>
-            </div>
-            <div class="login-body">
-                <div id="loginAlert" class="alert alert-danger py-2 small d-none"></div>
-                <div class="mb-3">
-                    <label class="form-label small fw-semibold">Username</label>
-                    <div class="input-group">
-                        <span class="input-group-text"><i class="bi bi-person"></i></span>
-                        <input type="text" class="form-control" id="loginUser" placeholder="Username" autocomplete="off">
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label small fw-semibold">Password</label>
-                    <div class="input-group">
-                        <span class="input-group-text"><i class="bi bi-lock"></i></span>
-                        <input type="password" class="form-control" id="loginPass" placeholder="Password">
-                        <button class="btn btn-outline-secondary" type="button" onclick="toggleLoginPw()">
-                            <i class="bi bi-eye" id="loginPwIcon"></i>
-                        </button>
-                    </div>
-                </div>
-                <button class="btn btn-primary w-100 fw-semibold" onclick="doLogin()" id="btnLogin">
-                    <i class="bi bi-box-arrow-in-right me-1"></i> Masuk
-                </button>
-            </div>
+<!-- ==================== LOGIN PAGE ==================== -->
+<div id="loginPage" class="login-page d-flex align-items-center justify-content-center min-vh-100">
+  <div class="login-card card shadow-lg border-0">
+    <div class="card-body p-4 p-md-5">
+      <div class="text-center mb-4">
+        <div class="login-icon mb-3">🛡️</div>
+        <h4 class="fw-bold mb-1">Panel Pengawas</h4>
+        <p class="text-muted small">CBT SMASSIC 2026 — SMAN 1 Batu</p>
+        <span class="badge bg-dark px-3 py-2 text-uppercase ls-1">Proctor Access</span>
+      </div>
+      <div id="loginAlert" class="alert alert-danger d-none small py-2" role="alert"></div>
+      <form id="loginForm" onsubmit="return handleLogin(event)">
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">Email</label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+            <input type="email" class="form-control" id="inEmail" placeholder="admin@sekolah.id" required>
+          </div>
         </div>
+        <div class="mb-4">
+          <label class="form-label small fw-semibold">Password</label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-lock"></i></span>
+            <input type="password" class="form-control" id="inPassword" placeholder="••••••••" required>
+            <button class="btn btn-outline-secondary" type="button" onclick="togglePassword()">
+              <i class="bi bi-eye" id="eyeIcon"></i>
+            </button>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary w-100 fw-semibold py-2" id="btnLogin">
+          <span class="spinner-border spinner-border-sm d-none me-2" id="loginSpinner"></span>
+          <i class="bi bi-box-arrow-in-right me-1"></i> Masuk Panel
+        </button>
+      </form>
     </div>
+  </div>
 </div>
 
-<!-- ============ DASHBOARD ============ -->
-<div id="dashboardSection" class="d-none">
-
-    <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg sticky-top border-bottom bg-body">
-        <div class="container-fluid">
-            <span class="navbar-brand fw-bold">
-                <span class="brand-icon">🛡️</span> CBT SMASSIC
-                <span class="badge bg-primary ms-1 small">PENGAWAS</span>
-            </span>
-            <div class="d-flex align-items-center gap-2">
-                <span class="text-muted small d-none d-md-inline" id="navUser"></span>
-                <button class="btn btn-sm btn-outline-secondary" onclick="toggleTheme()" title="Tema">
-                    <i class="bi bi-circle-half"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="doLogout()">
-                    <i class="bi bi-box-arrow-right"></i> <span class="d-none d-md-inline">Keluar</span>
-                </button>
-            </div>
+<!-- ==================== DASHBOARD ==================== -->
+<div id="dashboardPage" class="d-none">
+  <!-- Sidebar -->
+  <nav id="sidebar" class="sidebar d-flex flex-column">
+    <div class="sidebar-header p-3 border-bottom">
+      <div class="d-flex align-items-center gap-2">
+        <span class="fs-4">🛡️</span>
+        <div>
+          <div class="fw-bold small">CBT SMASSIC</div>
+          <div class="text-muted" style="font-size:11px">Panel Pengawas</div>
         </div>
+      </div>
+    </div>
+    <div class="nav-items flex-grow-1 p-2">
+      <button class="nav-link active w-100 text-start" data-section="overview" onclick="switchSection('overview')">
+        <i class="bi bi-grid-1x2-fill"></i> Overview
+      </button>
+      <button class="nav-link w-100 text-start" data-section="pengaturan" onclick="switchSection('pengaturan')">
+        <i class="bi bi-gear-fill"></i> Pengaturan Ujian
+      </button>
+      <button class="nav-link w-100 text-start" data-section="siswa" onclick="switchSection('siswa')">
+        <i class="bi bi-people-fill"></i> Monitor Siswa
+        <span class="badge bg-success ms-auto" id="navOnlineCount">0</span>
+      </button>
+      <button class="nav-link w-100 text-start" data-section="kecurangan" onclick="switchSection('kecurangan')">
+        <i class="bi bi-exclamation-triangle-fill"></i> Live Kecurangan
+        <span class="badge bg-danger ms-auto" id="navCheatCount">0</span>
+      </button>
+      <button class="nav-link w-100 text-start" data-section="peringatan" onclick="switchSection('peringatan')">
+        <i class="bi bi-bell-fill"></i> Peringatan
+        <span class="badge bg-warning text-dark ms-auto" id="navWarnCount">0</span>
+      </button>
+      <button class="nav-link w-100 text-start" data-section="hasil" onclick="switchSection('hasil')">
+        <i class="bi bi-clipboard-data-fill"></i> Rekap Nilai
+      </button>
+      <button class="nav-link w-100 text-start" data-section="soal" onclick="switchSection('soal')">
+        <i class="bi bi-journal-text"></i> Bank Soal
+      </button>
+    </div>
+    <div class="p-3 border-top">
+      <div class="small text-muted mb-2" id="adminEmail">admin@sekolah.id</div>
+      <button class="btn btn-outline-secondary btn-sm w-100" onclick="handleLogout()">
+        <i class="bi bi-box-arrow-left"></i> Logout
+      </button>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main id="mainContent" class="main-content">
+    <!-- Top Navbar -->
+    <nav class="top-navbar d-flex align-items-center justify-content-between px-3 px-md-4">
+      <div class="d-flex align-items-center gap-3">
+        <button class="btn btn-light btn-sm d-md-none" onclick="toggleSidebar()">
+          <i class="bi bi-list fs-5"></i>
+        </button>
+        <h5 class="mb-0 fw-bold" id="sectionTitle">📊 Overview</h5>
+      </div>
+      <div class="d-flex align-items-center gap-3">
+        <span class="badge bg-light text-dark border" id="clockBadge">
+          <i class="bi bi-clock"></i> <span id="liveClock">--:--:--</span>
+        </span>
+        <span class="realtime-dot" id="realtimeDot" title="Realtime Connected"></span>
+      </div>
     </nav>
 
-    <!-- Tabs -->
-    <div class="container-fluid mt-3">
-        <ul class="nav nav-tabs flex-nowrap overflow-auto" id="mainTabs" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="tab-siswa" data-bs-toggle="tab" data-bs-target="#paneSiswa" type="button">
-                    <i class="bi bi-people me-1"></i><span class="tab-text">Siswa</span>
-                    <span class="badge bg-primary ms-1" id="badgeSiswa">0</span>
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="tab-soal" data-bs-toggle="tab" data-bs-target="#paneSoal" type="button">
-                    <i class="bi bi-journal-text me-1"></i><span class="tab-text">Soal</span>
-                    <span class="badge bg-secondary ms-1" id="badgeSoal">0</span>
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="tab-pengaturan" data-bs-toggle="tab" data-bs-target="#panePengaturan" type="button">
-                    <i class="bi bi-gear me-1"></i><span class="tab-text">Pengaturan</span>
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="tab-hasil" data-bs-toggle="tab" data-bs-target="#paneHasil" type="button">
-                    <i class="bi bi-bar-chart me-1"></i><span class="tab-text">Hasil</span>
-                    <span class="badge bg-success ms-1" id="badgeHasil">0</span>
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="tab-cheat" data-bs-toggle="tab" data-bs-target="#paneCheat" type="button">
-                    <i class="bi bi-shield-exclamation me-1"></i><span class="tab-text">Kecurangan</span>
-                    <span class="badge bg-danger ms-1" id="badgeCheat">0</span>
-                </button>
-            </li>
-        </ul>
+    <div class="content-area p-3 p-md-4">
 
-        <div class="tab-content mt-3" id="mainTabContent">
-
-            <!-- ============ TAB SISWA ============ -->
-            <div class="tab-pane fade show active" id="paneSiswa">
-                <!-- Stats Cards -->
-                <div class="row g-2 mb-3">
-                    <div class="col-6 col-md-3"><div class="stat-card online"><div class="stat-num" id="statOnline">0</div><div class="stat-label">Online</div></div></div>
-                    <div class="col-6 col-md-3"><div class="stat-card total"><div class="stat-num" id="statTotal">0</div><div class="stat-label">Total</div></div></div>
-                    <div class="col-6 col-md-3"><div class="stat-card selesai"><div class="stat-num" id="statSelesai">0</div><div class="stat-label">Selesai</div></div></div>
-                    <div class="col-6 col-md-3"><div class="stat-card blocked"><div class="stat-num" id="statBlocked">0</div><div class="stat-label">Blocked</div></div></div>
-                </div>
-
-                <!-- Toolbar -->
-                <div class="d-flex flex-wrap gap-2 mb-3">
-                    <button class="btn btn-sm btn-success" onclick="openSiswaModal()">
-                        <i class="bi bi-plus-lg"></i> Tambah Siswa
-                    </button>
-                    <button class="btn btn-sm btn-outline-primary" onclick="loadSiswa()">
-                        <i class="bi bi-arrow-clockwise"></i> Refresh
-                    </button>
-                    <button class="btn btn-sm btn-outline-warning" onclick="resetAllSiswa()">
-                        <i class="bi bi-arrow-counterclockwise"></i> Reset Semua Status
-                    </button>
-                    <div class="ms-auto">
-                        <input type="text" class="form-control form-control-sm" placeholder="🔍 Cari siswa..." id="searchSiswa" oninput="filterSiswa()">
-                    </div>
-                </div>
-
-                <!-- Siswa Table -->
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover align-middle" id="tblSiswa">
-                        <thead>
-                            <tr>
-                                <th>NIS</th>
-                                <th>Nama</th>
-                                <th>Sekolah</th>
-                                <th>Status</th>
-                                <th>Heartbeat</th>
-                                <th class="text-center">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tbodySiswa"></tbody>
-                    </table>
-                </div>
+      <!-- ===== OVERVIEW SECTION ===== -->
+      <section id="sec-overview" class="section-panel">
+        <div class="row g-3 mb-4" id="statsRow">
+          <div class="col-6 col-lg-3">
+            <div class="card stat-card border-0 shadow-sm h-100"><div class="card-body">
+              <div class="d-flex align-items-center gap-3">
+                <div class="stat-icon bg-primary-subtle text-primary"><i class="bi bi-people-fill"></i></div>
+                <div><div class="stat-value" id="statTotal">0</div><div class="stat-label">Total Siswa</div></div>
+              </div>
+            </div></div>
+          </div>
+          <div class="col-6 col-lg-3">
+            <div class="card stat-card border-0 shadow-sm h-100"><div class="card-body">
+              <div class="d-flex align-items-center gap-3">
+                <div class="stat-icon bg-success-subtle text-success"><i class="bi bi-wifi"></i></div>
+                <div><div class="stat-value" id="statOnline">0</div><div class="stat-label">Online</div></div>
+              </div>
+            </div></div>
+          </div>
+          <div class="col-6 col-lg-3">
+            <div class="card stat-card border-0 shadow-sm h-100"><div class="card-body">
+              <div class="d-flex align-items-center gap-3">
+                <div class="stat-icon bg-info-subtle text-info"><i class="bi bi-check-circle-fill"></i></div>
+                <div><div class="stat-value" id="statSelesai">0</div><div class="stat-label">Selesai</div></div>
+              </div>
+            </div></div>
+          </div>
+          <div class="col-6 col-lg-3">
+            <div class="card stat-card border-0 shadow-sm h-100"><div class="card-body">
+              <div class="d-flex align-items-center gap-3">
+                <div class="stat-icon bg-danger-subtle text-danger"><i class="bi bi-shield-exclamation"></i></div>
+                <div><div class="stat-value" id="statBlocked">0</div><div class="stat-label">Blocked</div></div>
+              </div>
+            </div></div>
+          </div>
+        </div>
+        <div class="row g-3 mb-4">
+          <div class="col-6 col-lg-3">
+            <div class="card stat-card border-0 shadow-sm h-100"><div class="card-body">
+              <div class="d-flex align-items-center gap-3">
+                <div class="stat-icon bg-warning-subtle text-warning"><i class="bi bi-exclamation-triangle-fill"></i></div>
+                <div><div class="stat-value" id="statKecurangan">0</div><div class="stat-label">Kecurangan</div></div>
+              </div>
+            </div></div>
+          </div>
+          <div class="col-6 col-lg-3">
+            <div class="card stat-card border-0 shadow-sm h-100"><div class="card-body">
+              <div class="d-flex align-items-center gap-3">
+                <div class="stat-icon bg-primary-subtle text-primary"><i class="bi bi-journal-text"></i></div>
+                <div><div class="stat-value" id="statSoal">0</div><div class="stat-label">Total Soal</div></div>
+              </div>
+            </div></div>
+          </div>
+          <div class="col-6 col-lg-3">
+            <div class="card stat-card border-0 shadow-sm h-100"><div class="card-body">
+              <div class="d-flex align-items-center gap-3">
+                <div class="stat-icon bg-success-subtle text-success"><i class="bi bi-trophy-fill"></i></div>
+                <div><div class="stat-value" id="statRata">0</div><div class="stat-label">Rata-rata Skor</div></div>
+              </div>
+            </div></div>
+          </div>
+          <div class="col-6 col-lg-3">
+            <div class="card stat-card border-0 shadow-sm h-100"><div class="card-body">
+              <div class="d-flex align-items-center gap-3">
+                <div class="stat-icon bg-info-subtle text-info"><i class="bi bi-clipboard-check-fill"></i></div>
+                <div><div class="stat-value" id="statHasil">0</div><div class="stat-label">Sudah Submit</div></div>
+              </div>
+            </div></div>
+          </div>
+        </div>
+        <!-- Recent Cheating -->
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white d-flex align-items-center justify-content-between">
+            <h6 class="mb-0 fw-bold"><i class="bi bi-lightning-charge-fill text-warning"></i> Kecurangan Terbaru</h6>
+            <button class="btn btn-sm btn-outline-secondary" onclick="switchSection('kecurangan')">Lihat Semua →</button>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-hover table-sm mb-0">
+                <thead class="table-light"><tr><th>Waktu</th><th>NIS</th><th>Nama</th><th>Jenis</th></tr></thead>
+                <tbody id="recentCheatBody">
+                  <tr><td colspan="4" class="text-center text-muted py-4"><i class="bi bi-shield-check fs-3 d-block mb-2"></i>Belum ada kecurangan</td></tr>
+                </tbody>
+              </table>
             </div>
+          </div>
+        </div>
+      </section>
 
-            <!-- ============ TAB SOAL ============ -->
-            <div class="tab-pane fade" id="paneSoal">
-                <div class="d-flex flex-wrap gap-2 mb-3">
-                    <button class="btn btn-sm btn-success" onclick="openSoalModal()">
-                        <i class="bi bi-plus-lg"></i> Tambah Soal
-                    </button>
-                    <button class="btn btn-sm btn-outline-primary" onclick="loadSoal()">
-                        <i class="bi bi-arrow-clockwise"></i> Refresh
-                    </button>
-                    <select class="form-select form-select-sm w-auto" id="filterMapelSoal" onchange="loadSoal()">
-                        <option value="">Semua Mapel</option>
-                        <option value="Matematika">Matematika</option>
-                        <option value="IPA">IPA</option>
-                        <option value="IPS">IPS</option>
-                    </select>
-                    <select class="form-select form-select-sm w-auto" id="filterTipeSoal" onchange="loadSoal()">
-                        <option value="">Semua Tipe</option>
-                        <option value="PG">Pilihan Ganda</option>
-                        <option value="BS">Benar/Salah</option>
-                        <option value="IS">Isian</option>
-                    </select>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteAllSoal()">
-                        <i class="bi bi-trash"></i> Hapus Semua
-                    </button>
-                </div>
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover align-middle">
-                        <thead>
-                            <tr>
-                                <th>No</th>
-                                <th>Mapel</th>
-                                <th>Tipe</th>
-                                <th>Soal</th>
-                                <th>Gambar</th>
-                                <th>Kunci</th>
-                                <th>Bobot</th>
-                                <th class="text-center">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tbodySoal"></tbody>
-                    </table>
-                </div>
+      <!-- ===== PENGATURAN SECTION ===== -->
+      <section id="sec-pengaturan" class="section-panel d-none">
+        <div class="row g-4">
+          <!-- Timer per mapel -->
+          <div class="col-lg-8">
+            <div class="card border-0 shadow-sm">
+              <div class="card-header bg-white"><h6 class="mb-0 fw-bold"><i class="bi bi-clock-fill text-primary"></i> Pengaturan Timer & Status Ujian</h6></div>
+              <div class="card-body" id="pengaturanBody">
+                <div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm me-2"></div>Memuat...</div>
+              </div>
             </div>
+          </div>
+          <!-- Quick Actions -->
+          <div class="col-lg-4">
+            <div class="card border-0 shadow-sm">
+              <div class="card-header bg-white"><h6 class="mb-0 fw-bold"><i class="bi bi-lightning-fill text-warning"></i> Quick Actions</h6></div>
+              <div class="card-body d-grid gap-2">
+                <button class="btn btn-success" onclick="startAllExams()"><i class="bi bi-play-fill"></i> Mulai Semua Ujian</button>
+                <button class="btn btn-danger" onclick="stopAllExams()"><i class="bi bi-stop-fill"></i> Hentikan Semua Ujian</button>
+                <button class="btn btn-warning" onclick="resetAllStatus()"><i class="bi bi-arrow-counterclockwise"></i> Reset Semua Status Siswa</button>
+                <hr>
+                <button class="btn btn-outline-primary" onclick="addMapelPengaturan()"><i class="bi bi-plus"></i> Tambah Mapel Baru</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-            <!-- ============ TAB PENGATURAN ============ -->
-            <div class="tab-pane fade" id="panePengaturan">
+      <!-- ===== SISWA SECTION ===== -->
+      <section id="sec-siswa" class="section-panel d-none">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <h6 class="mb-0 fw-bold"><i class="bi bi-people-fill text-primary"></i> Monitor Siswa</h6>
+            <div class="d-flex gap-2 flex-wrap">
+              <div class="input-group input-group-sm" style="width:220px">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" placeholder="Cari NIS/Nama..." id="searchSiswa" oninput="filterSiswa()">
+              </div>
+              <select class="form-select form-select-sm" style="width:140px" id="filterStatus" onchange="filterSiswa()">
+                <option value="">Semua Status</option>
+                <option value="ONLINE">Online</option>
+                <option value="OFFLINE">Offline</option>
+                <option value="SELESAI">Selesai</option>
+                <option value="BLOCKED">Blocked</option>
+                <option value="KICKED">Kicked</option>
+              </select>
+              <button class="btn btn-sm btn-success" onclick="exportSiswaExcel()"><i class="bi bi-file-earmark-excel"></i> Export</button>
+              <button class="btn btn-sm btn-warning" onclick="resetAllStatus()"><i class="bi bi-arrow-counterclockwise"></i> Reset</button>
+              <button class="btn btn-sm btn-outline-secondary" onclick="loadSiswa()"><i class="bi bi-arrow-clockwise"></i></button>
+            </div>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-hover table-sm mb-0 align-middle">
+                <thead class="table-light">
+                  <tr>
+                    <th>#</th><th>NIS</th><th>Nama</th><th>Sekolah</th><th>Status</th><th>Heartbeat</th><th style="width:250px">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody id="siswaBody"><tr><td colspan="7" class="text-center text-muted py-5"><div class="spinner-border spinner-border-sm me-2"></div>Memuat...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card-footer bg-white small text-muted" id="siswaFooter">Total: 0 siswa</div>
+        </div>
+      </section>
+
+      <!-- ===== KECURANGAN SECTION ===== -->
+      <section id="sec-kecurangan" class="section-panel d-none">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <h6 class="mb-0 fw-bold"><i class="bi bi-exclamation-triangle-fill text-danger"></i> Live Kecurangan</h6>
+            <div class="d-flex gap-2 flex-wrap">
+              <div class="input-group input-group-sm" style="width:220px">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" placeholder="Cari NIS/Nama..." id="searchCheat" oninput="filterKecurangan()">
+              </div>
+              <select class="form-select form-select-sm" style="width:160px" id="filterJenis" onchange="filterKecurangan()">
+                <option value="">Semua Jenis</option>
+                <option value="Ganti Tab">Ganti Tab</option>
+                <option value="Focus Lost">Focus Lost</option>
+                <option value="Keluar Fullscreen">Keluar Fullscreen</option>
+                <option value="Klik Kanan">Klik Kanan</option>
+                <option value="Shortcut Keyboard">Shortcut</option>
+                <option value="DevTools">DevTools</option>
+                <option value="Mouse Leave">Mouse Leave</option>
+                <option value="Screenshot">Screenshot</option>
+              </select>
+              <button class="btn btn-sm btn-success" onclick="exportKecuranganExcel()"><i class="bi bi-file-earmark-excel"></i> Export</button>
+              <button class="btn btn-sm btn-danger" onclick="confirmResetKecurangan()"><i class="bi bi-trash3"></i> Reset</button>
+              <button class="btn btn-sm btn-outline-secondary" onclick="loadKecurangan()"><i class="bi bi-arrow-clockwise"></i></button>
+            </div>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive" style="max-height:70vh;overflow-y:auto">
+              <table class="table table-hover table-sm mb-0 align-middle">
+                <thead class="table-light sticky-top"><tr><th>#</th><th>Waktu</th><th>NIS</th><th>Nama</th><th>Jenis</th></tr></thead>
+                <tbody id="cheatBody"><tr><td colspan="5" class="text-center text-muted py-5"><div class="spinner-border spinner-border-sm me-2"></div>Memuat...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card-footer bg-white small text-muted" id="cheatFooter">Total: 0 record</div>
+        </div>
+      </section>
+
+      <!-- ===== PERINGATAN SECTION ===== -->
+      <section id="sec-peringatan" class="section-panel d-none">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <h6 class="mb-0 fw-bold"><i class="bi bi-bell-fill text-warning"></i> Sistem Peringatan Siswa</h6>
+            <div class="d-flex gap-2">
+              <button class="btn btn-sm btn-success" onclick="exportPeringatanExcel()"><i class="bi bi-file-earmark-excel"></i> Export</button>
+              <button class="btn btn-sm btn-danger" onclick="confirmResetPeringatan()"><i class="bi bi-trash3"></i> Reset</button>
+              <button class="btn btn-sm btn-outline-secondary" onclick="loadPeringatan()"><i class="bi bi-arrow-clockwise"></i></button>
+            </div>
+          </div>
+          <div class="card-body">
+            <!-- Send Warning Form -->
+            <div class="card bg-light border-0 mb-4">
+              <div class="card-body">
+                <h6 class="fw-bold mb-3"><i class="bi bi-send"></i> Kirim Peringatan ke Siswa</h6>
                 <div class="row g-3">
-                    <div class="col-md-4" id="pengaturanCards"></div>
-                    <div class="col-md-8">
-                        <div class="card">
-                            <div class="card-header fw-semibold">
-                                <i class="bi bi-broadcast me-1"></i> Kirim Peringatan ke Siswa
-                            </div>
-                            <div class="card-body">
-                                <div class="mb-2">
-                                    <label class="form-label small fw-semibold">Target Siswa</label>
-                                    <select class="form-select form-select-sm" id="warnTarget"></select>
-                                </div>
-                                <div class="mb-2">
-                                    <label class="form-label small fw-semibold">Level</label>
-                                    <select class="form-select form-select-sm" id="warnLevel">
-                                        <option value="YELLOW">🟡 Kuning — Peringatan Ringan</option>
-                                        <option value="ORANGE">🟠 Oranye — Peringatan Sedang</option>
-                                        <option value="RED">🔴 Merah — Peringatan Berat</option>
-                                    </select>
-                                </div>
-                                <div class="mb-2">
-                                    <label class="form-label small fw-semibold">Pesan</label>
-                                    <textarea class="form-control form-control-sm" id="warnMsg" rows="2" placeholder="Tulis pesan peringatan..."></textarea>
-                                </div>
-                                <button class="btn btn-warning btn-sm fw-semibold" onclick="sendWarning()">
-                                    <i class="bi bi-send me-1"></i> Kirim Peringatan
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ============ TAB HASIL ============ -->
-            <div class="tab-pane fade" id="paneHasil">
-                <div class="d-flex flex-wrap gap-2 mb-3">
-                    <button class="btn btn-sm btn-outline-primary" onclick="loadHasil()">
-                        <i class="bi bi-arrow-clockwise"></i> Refresh
-                    </button>
-                    <select class="form-select form-select-sm w-auto" id="filterMapelHasil" onchange="loadHasil()">
-                        <option value="">Semua Mapel</option>
-                        <option value="Matematika">Matematika</option>
-                        <option value="IPA">IPA</option>
-                        <option value="IPS">IPS</option>
+                  <div class="col-md-3">
+                    <label class="form-label small fw-semibold">Pilih Siswa</label>
+                    <select class="form-select form-select-sm" id="warnSiswa"></select>
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label small fw-semibold">Level</label>
+                    <select class="form-select form-select-sm" id="warnLevel">
+                      <option value="YELLOW">🟡 Yellow</option>
+                      <option value="ORANGE">🟠 Orange</option>
+                      <option value="RED">🔴 Red</option>
                     </select>
-                    <button class="btn btn-sm btn-outline-success" onclick="exportHasil()">
-                        <i class="bi bi-download"></i> Export CSV
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteAllHasil()">
-                        <i class="bi bi-trash"></i> Hapus Semua Hasil
-                    </button>
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label small fw-semibold">Pesan Preset</label>
+                    <select class="form-select form-select-sm" id="warnPreset" onchange="applyPresetMsg()">
+                      <option value="">-- Custom --</option>
+                      <option value="Jangan mencontek!">Jangan mencontek!</option>
+                      <option value="Fokus ke layar ujian Anda.">Fokus ke layar ujian Anda.</option>
+                      <option value="Peringatan terakhir sebelum dikeluarkan.">Peringatan terakhir!</option>
+                      <option value="Jangan buka tab lain!">Jangan buka tab lain!</option>
+                      <option value="Anda terdeteksi melakukan kecurangan.">Terdeteksi kecurangan!</option>
+                    </select>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small fw-semibold">Pesan (custom)</label>
+                    <div class="input-group input-group-sm">
+                      <input type="text" class="form-control" id="warnMsg" placeholder="Ketik pesan peringatan...">
+                      <button class="btn btn-warning" onclick="sendWarning()"><i class="bi bi-send-fill"></i> Kirim</button>
+                    </div>
+                  </div>
                 </div>
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover align-middle">
-                        <thead>
-                            <tr>
-                                <th>NIS</th>
-                                <th>Nama</th>
-                                <th>Sekolah</th>
-                                <th>Mapel</th>
-                                <th>Skor</th>
-                                <th>Benar</th>
-                                <th>Salah</th>
-                                <th>Kosong</th>
-                                <th>Mulai</th>
-                                <th>Selesai</th>
-                                <th class="text-center">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tbodyHasil"></tbody>
-                    </table>
-                </div>
+              </div>
             </div>
-
-            <!-- ============ TAB KECURANGAN ============ -->
-            <div class="tab-pane fade" id="paneCheat">
-                <div class="d-flex flex-wrap gap-2 mb-3">
-                    <button class="btn btn-sm btn-outline-primary" onclick="loadCheat()">
-                        <i class="bi bi-arrow-clockwise"></i> Refresh
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="clearAllCheat()">
-                        <i class="bi bi-trash"></i> Hapus Semua Log
-                    </button>
-                </div>
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover align-middle">
-                        <thead>
-                            <tr>
-                                <th>Waktu</th>
-                                <th>NIS</th>
-                                <th>Nama</th>
-                                <th>Jenis</th>
-                                <th>Detail</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tbodyCheat"></tbody>
-                    </table>
-                </div>
+            <!-- Warning History -->
+            <div class="table-responsive" style="max-height:50vh;overflow-y:auto">
+              <table class="table table-hover table-sm mb-0 align-middle">
+                <thead class="table-light sticky-top"><tr><th>#</th><th>Waktu</th><th>NIS</th><th>Nama</th><th>Level</th><th>Pesan</th><th>Status</th></tr></thead>
+                <tbody id="warnBody"><tr><td colspan="7" class="text-center text-muted py-4">Belum ada peringatan</td></tr></tbody>
+              </table>
             </div>
-
+          </div>
         </div>
+      </section>
+
+      <!-- ===== HASIL SECTION ===== -->
+      <section id="sec-hasil" class="section-panel d-none">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <h6 class="mb-0 fw-bold"><i class="bi bi-clipboard-data-fill text-success"></i> Rekap Nilai</h6>
+            <div class="d-flex gap-2 flex-wrap">
+              <div class="input-group input-group-sm" style="width:220px">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" placeholder="Cari NIS/Nama..." id="searchHasil" oninput="filterHasil()">
+              </div>
+              <select class="form-select form-select-sm" style="width:140px" id="filterMapelHasil" onchange="filterHasil()">
+                <option value="">Semua Mapel</option>
+              </select>
+              <button class="btn btn-sm btn-success" onclick="exportHasilExcel()"><i class="bi bi-file-earmark-excel"></i> Export Excel</button>
+              <button class="btn btn-sm btn-danger" onclick="confirmResetHasil()"><i class="bi bi-trash3"></i> Reset</button>
+              <button class="btn btn-sm btn-outline-secondary" onclick="loadHasil()"><i class="bi bi-arrow-clockwise"></i></button>
+            </div>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-hover table-sm mb-0 align-middle">
+                <thead class="table-light">
+                  <tr><th>#</th><th>NIS</th><th>Nama</th><th>Sekolah</th><th>Mapel</th><th>Skor</th><th>Benar</th><th>Salah</th><th>Kosong</th><th>Selesai</th><th>Aksi</th></tr>
+                </thead>
+                <tbody id="hasilBody"><tr><td colspan="11" class="text-center text-muted py-5"><div class="spinner-border spinner-border-sm me-2"></div>Memuat...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card-footer bg-white small text-muted" id="hasilFooter">Total: 0 hasil</div>
+        </div>
+      </section>
+
+      <!-- ===== SOAL SECTION ===== -->
+      <section id="sec-soal" class="section-panel d-none">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <h6 class="mb-0 fw-bold"><i class="bi bi-journal-text text-primary"></i> Bank Soal</h6>
+            <div class="d-flex gap-2 flex-wrap">
+              <select class="form-select form-select-sm" style="width:150px" id="filterMapelSoal" onchange="filterSoal()">
+                <option value="">Semua Mapel</option>
+              </select>
+              <select class="form-select form-select-sm" style="width:130px" id="filterTipeSoal" onchange="filterSoal()">
+                <option value="">Semua Tipe</option>
+                <option value="PG">Pilihan Ganda</option>
+                <option value="BS">Benar/Salah</option>
+                <option value="IS">Isian Singkat</option>
+              </select>
+              <button class="btn btn-sm btn-primary" onclick="openSoalModal()"><i class="bi bi-plus-lg"></i> Tambah Soal</button>
+              <button class="btn btn-sm btn-success" onclick="exportSoalExcel()"><i class="bi bi-file-earmark-excel"></i> Export</button>
+              <button class="btn btn-sm btn-outline-secondary" onclick="loadSoal()"><i class="bi bi-arrow-clockwise"></i></button>
+            </div>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive" style="max-height:70vh;overflow-y:auto">
+              <table class="table table-hover table-sm mb-0 align-middle">
+                <thead class="table-light sticky-top">
+                  <tr><th>No</th><th>Mapel</th><th>Tipe</th><th>Soal</th><th>Kunci</th><th>Bobot</th><th>Gambar</th><th style="width:120px">Aksi</th></tr>
+                </thead>
+                <tbody id="soalBody"><tr><td colspan="8" class="text-center text-muted py-5"><div class="spinner-border spinner-border-sm me-2"></div>Memuat...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card-footer bg-white small text-muted" id="soalFooter">Total: 0 soal</div>
+        </div>
+      </section>
+
     </div>
+  </main>
 </div>
 
-<!-- ============ MODAL SISWA ============ -->
-<div class="modal fade" id="modalSiswa" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h6 class="modal-title fw-bold" id="modalSiswaTitle">Tambah Siswa</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+<!-- ===== SOAL MODAL (Add/Edit) ===== -->
+<div class="modal fade" id="soalModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold" id="soalModalTitle"><i class="bi bi-journal-plus"></i> Tambah Soal</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="soalEditNo">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">No Soal</label>
+            <input type="number" class="form-control form-control-sm" id="soalNo" min="1">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">Mapel</label>
+            <select class="form-select form-select-sm" id="soalMapel">
+              <option value="Matematika">Matematika</option>
+              <option value="IPA">IPA</option>
+              <option value="IPS">IPS</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">Tipe Soal</label>
+            <select class="form-select form-select-sm" id="soalTipe" onchange="toggleSoalFields()">
+              <option value="PG">Pilihan Ganda (A-E)</option>
+              <option value="BS">Benar / Salah</option>
+              <option value="IS">Isian Singkat</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label small fw-semibold">Soal <small class="text-muted">(Gunakan $...$ untuk rumus LaTeX inline, $$...$$ untuk display)</small></label>
+            <textarea class="form-control" id="soalText" rows="4" placeholder="Contoh: Tentukan nilai $x$ jika $2x + 3 = 7$"></textarea>
+            <div class="mt-2 p-2 border rounded bg-light small" id="soalPreview">Preview muncul di sini...</div>
+          </div>
+          <!-- PG Options -->
+          <div id="pgFields">
+            <div class="row g-2">
+              <div class="col-md-6"><label class="form-label small fw-semibold">Opsi A</label><input type="text" class="form-control form-control-sm" id="soalA" placeholder="Opsi A (bisa pakai $rumus$)"></div>
+              <div class="col-md-6"><label class="form-label small fw-semibold">Opsi B</label><input type="text" class="form-control form-control-sm" id="soalB" placeholder="Opsi B"></div>
+              <div class="col-md-6"><label class="form-label small fw-semibold">Opsi C</label><input type="text" class="form-control form-control-sm" id="soalC" placeholder="Opsi C"></div>
+              <div class="col-md-6"><label class="form-label small fw-semibold">Opsi D</label><input type="text" class="form-control form-control-sm" id="soalD" placeholder="Opsi D"></div>
+              <div class="col-md-6"><label class="form-label small fw-semibold">Opsi E</label><input type="text" class="form-control form-control-sm" id="soalE" placeholder="Opsi E (kosongkan jika 4 opsi)"></div>
             </div>
-            <div class="modal-body">
-                <input type="hidden" id="siswaEditNIS">
-                <div class="mb-2">
-                    <label class="form-label small fw-semibold">NIS</label>
-                    <input type="text" class="form-control form-control-sm" id="siswaNIS" placeholder="Nomor Induk Siswa">
-                </div>
-                <div class="mb-2">
-                    <label class="form-label small fw-semibold">Nama Lengkap</label>
-                    <input type="text" class="form-control form-control-sm" id="siswaNama" placeholder="Nama lengkap siswa">
-                </div>
-                <div class="mb-2">
-                    <label class="form-label small fw-semibold">Sekolah</label>
-                    <input type="text" class="form-control form-control-sm" id="siswaSekolah" placeholder="Nama sekolah">
-                </div>
-                <div class="mb-2">
-                    <label class="form-label small fw-semibold">Password</label>
-                    <input type="text" class="form-control form-control-sm" id="siswaPassword" placeholder="Password login siswa">
-                </div>
+          </div>
+          <div class="row g-2">
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">Kunci Jawaban</label>
+              <input type="text" class="form-control form-control-sm" id="soalKunci" placeholder="A/B/C/D/E atau Benar/Salah atau teks">
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Batal</button>
-                <button type="button" class="btn btn-sm btn-primary" onclick="saveSiswa()">
-                    <i class="bi bi-check-lg me-1"></i> Simpan
-                </button>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">Bobot</label>
+              <input type="number" class="form-control form-control-sm" id="soalBobot" value="1" min="1">
             </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">URL Gambar (opsional)</label>
+              <input type="text" class="form-control form-control-sm" id="soalGambar" placeholder="https://...">
+            </div>
+          </div>
         </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+        <button class="btn btn-primary" onclick="saveSoal()"><i class="bi bi-save"></i> Simpan</button>
+      </div>
     </div>
+  </div>
 </div>
 
-<!-- ============ MODAL SOAL ============ -->
-<div class="modal fade" id="modalSoal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h6 class="modal-title fw-bold" id="modalSoalTitle">Tambah Soal</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="soalEditNo">
-                <div class="row g-2 mb-2">
-                    <div class="col-md-3">
-                        <label class="form-label small fw-semibold">No Soal</label>
-                        <input type="number" class="form-control form-control-sm" id="soalNo" min="1">
-                    </div>
-                    <div class="col-md-5">
-                        <label class="form-label small fw-semibold">Mapel</label>
-                        <select class="form-select form-select-sm" id="soalMapel">
-                            <option value="Matematika">Matematika</option>
-                            <option value="IPA">IPA</option>
-                            <option value="IPS">IPS</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small fw-semibold">Tipe</label>
-                        <select class="form-select form-select-sm" id="soalTipe" onchange="toggleSoalFields()">
-                            <option value="PG">Pilihan Ganda</option>
-                            <option value="BS">Benar / Salah</option>
-                            <option value="IS">Isian Singkat</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="mb-2">
-                    <label class="form-label small fw-semibold">Soal</label>
-                    <textarea class="form-control form-control-sm" id="soalText" rows="3" placeholder="Tulis soal di sini... (dukung LaTeX: $rumus$)"></textarea>
-                </div>
-                <div id="pgFields">
-                    <div class="row g-2 mb-2">
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold">Opsi A</label>
-                            <input type="text" class="form-control form-control-sm" id="soalA" placeholder="Pilihan A">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold">Opsi B</label>
-                            <input type="text" class="form-control form-control-sm" id="soalB" placeholder="Pilihan B">
-                        </div>
-                    </div>
-                    <div class="row g-2 mb-2">
-                        <div class="col-md-4">
-                            <label class="form-label small fw-semibold">Opsi C</label>
-                            <input type="text" class="form-control form-control-sm" id="soalC" placeholder="Pilihan C">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label small fw-semibold">Opsi D</label>
-                            <input type="text" class="form-control form-control-sm" id="soalD" placeholder="Pilihan D">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label small fw-semibold">Opsi E</label>
-                            <input type="text" class="form-control form-control-sm" id="soalE" placeholder="Pilihan E (opsional)">
-                        </div>
-                    </div>
-                </div>
-                <div class="row g-2 mb-2">
-                    <div class="col-md-4">
-                        <label class="form-label small fw-semibold">Kunci Jawaban</label>
-                        <input type="text" class="form-control form-control-sm" id="soalKunci" placeholder="A/B/C/D/E atau teks">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small fw-semibold">Bobot</label>
-                        <input type="number" class="form-control form-control-sm" id="soalBobot" value="1" min="1">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small fw-semibold">Gambar Soal</label>
-                        <input type="file" class="form-control form-control-sm" id="soalGambarFile" accept="image/*" onchange="previewSoalImage(event)">
-                        <input type="hidden" id="soalGambar">
-                        <div id="soalGambarPreview" class="mt-2"></div>
-                        <div id="soalGambarUploadStatus" class="small mt-1"></div>
-                        <button type="button" class="btn btn-sm btn-outline-danger mt-1 d-none" id="btnRemoveImg" onclick="removeSoalImage()">
-                            <i class="bi bi-trash me-1"></i>Hapus Gambar
-                        </button>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Batal</button>
-                <button type="button" class="btn btn-sm btn-primary" onclick="saveSoal()" id="btnSaveSoal">
-                    <i class="bi bi-check-lg me-1"></i> Simpan
-                </button>
-            </div>
+<!-- ===== CONFIRMATION MODAL ===== -->
+<div class="modal fade" id="confirmModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <div class="modal-body text-center py-4">
+        <div class="fs-1 mb-3" id="confirmIcon">⚠️</div>
+        <h5 class="fw-bold" id="confirmTitle">Konfirmasi</h5>
+        <p class="text-muted small" id="confirmMsg">Apakah Anda yakin?</p>
+        <div class="d-flex gap-2 justify-content-center mt-3">
+          <button class="btn btn-secondary btn-sm px-4" data-bs-dismiss="modal">Batal</button>
+          <button class="btn btn-danger btn-sm px-4" id="confirmBtn">Ya</button>
         </div>
+      </div>
     </div>
+  </div>
 </div>
 
-<!-- ============ MODAL DETAIL HASIL ============ -->
-<div class="modal fade" id="modalDetailHasil" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h6 class="modal-title fw-bold">Detail Jawaban</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body" id="detailHasilBody"></div>
-        </div>
-    </div>
-</div>
+<!-- ===== TOAST CONTAINER ===== -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer"></div>
 
-<!-- ============ TOAST ============ -->
-<div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer">
-    <div id="liveToast" class="toast align-items-center border-0" role="alert">
-        <div class="d-flex">
-            <div class="toast-body" id="toastBody"></div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-        </div>
-    </div>
-</div>
+<!-- ===== AUDIO ===== -->
+<audio id="alertSound" preload="auto">
+  <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2LkZqTi4F5dXmBipOcnZeQiIB9foOLk5qcmJGJgH17gImSnJyYkImAe3uBipOcnZiRiYCAf4OLk5qcmJCIf317gYqTnJ2YkYmAgH+Di5OanJiQiH99e4GKk5ydmJGJgIB/g4uTmpyYkIh/fXuBipOcnZiRiYCAf4OLk5qcmA==" type="audio/wav">
+</audio>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="dashboard.js"></script>
 </body>
 </html>
