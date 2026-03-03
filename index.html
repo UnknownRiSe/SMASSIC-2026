@@ -1,195 +1,221 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>CBT SMASSIC 2026</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
-<link rel="stylesheet" href="style.css">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>CBT SMASSIC 2026</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-
-<!-- LOADER -->
-<div class="loader-overlay" id="loader">
-  <div class="loader-spinner"></div>
-  <div class="loader-text">Memproses...</div>
-</div>
-
-<!-- TOAST -->
-<div class="toast-wrap" id="toastWrap"></div>
-
-<!-- WARNING POPUP from Pengawas -->
-<div class="warning-overlay" id="warningOverlay">
-  <div class="warning-box">
-    <div class="warn-border">
-      <div class="warn-icon" id="warnIcon">⚠️</div>
-      <div class="warn-title" id="warnTitle">PERINGATAN</div>
-      <div class="warn-msg" id="warnMsg">Anda mendapat peringatan dari pengawas.</div>
-      <button class="btn-main" onclick="dismissWarning()" style="background:var(--dark);margin-top:16px">
-        ✅ Saya Mengerti
-      </button>
-    </div>
+  <!-- LOADER -->
+  <div class="loader-overlay" id="loader">
+    <div class="loader-spinner"></div>
+    <div class="loader-text">Memproses...</div>
   </div>
-</div>
 
-<!-- CHEAT OVERLAY -->
-<div class="cheat-overlay" id="cheatOverlay">
-  <div class="cheat-icon">⚠️</div>
-  <h2>Pelanggaran Terdeteksi!</h2>
-  <p id="cheatMsg">Tindakan Anda telah dicatat.</p>
-  <div class="cheat-count" id="cheatCount">Pelanggaran ke-1</div>
-  <button class="btn-main" onclick="dismissCheat()" style="background:#fff;color:var(--danger);margin-top:20px">
-    Kembali ke Ujian
-  </button>
-</div>
+  <!-- TOAST -->
+  <div class="toast-wrap" id="toastWrap"></div>
 
-<!-- BLOCKED OVERLAY -->
-<div class="blocked-overlay" id="blockedOverlay">
-  <div style="font-size:100px;margin-bottom:16px">🚫</div>
-  <h2>AKUN DIBLOKIR</h2>
-  <p>Anda telah melakukan terlalu banyak pelanggaran.<br>Hubungi pengawas ujian.</p>
-  <button class="btn-main" onclick="recheckBlock()" style="background:#fff;color:#b71c1c;margin-top:20px" id="recheckBlockBtn">
-    🔄 Cek Ulang Status
-  </button>
-  <p id="recheckInfo" style="margin-top:8px;font-size:12px;opacity:.7"></p>
-</div>
-
-<!-- KICKED OVERLAY -->
-<div class="kicked-overlay" id="kickedOverlay">
-  <div style="font-size:80px;margin-bottom:16px">🚪</div>
-  <h2>Anda Dikeluarkan dari Ujian</h2>
-  <p>Pengawas telah mengeluarkan Anda. Hubungi pengawas.</p>
-  <button class="btn-main" onclick="recheckKick()" style="background:#fff;color:var(--dark);margin-top:20px" id="recheckKickBtn">
-    🔄 Cek Ulang Status
-  </button>
-  <p id="recheckKickInfo" style="margin-top:8px;font-size:12px;opacity:.7"></p>
-</div>
-
-<!-- ==================== LOGIN PAGE ==================== -->
-<div class="page login-page" id="loginPage">
-  <div class="login-card">
-    <div class="login-header">
-      <div class="login-logo">📝</div>
-      <h1>CBT SMASSIC 2026</h1>
-      <p>Computer Based Test — SMAN 1 Batu</p>
-    </div>
-    <div class="login-body">
-      <div class="login-alert" id="loginAlert"></div>
-      <div class="form-group">
-        <label>NIS</label>
-        <input type="text" id="inputNIS" placeholder="Masukkan NIS" autocomplete="off">
-      </div>
-      <div class="form-group">
-        <label>Password</label>
-        <div class="password-wrap">
-          <input type="password" id="inputPassword" placeholder="Masukkan Password" autocomplete="off">
-          <button type="button" class="toggle-pw" onclick="togglePw()">👁️</button>
-        </div>
-      </div>
-      <button class="btn-main" id="btnLogin" onclick="doLogin()">
-        🔐 Masuk Ujian
-      </button>
-      <div class="login-footer">
-        ⚠️ Kecurangan terdeteksi otomatis & dilaporkan real-time
+  <!-- WARNING POPUP from Pengawas -->
+  <div class="warning-overlay" id="warningOverlay">
+    <div class="warning-box">
+      <div class="warn-border">
+        <div class="warn-icon" id="warnIcon">⚠️</div>
+        <div class="warn-title" id="warnTitle">PERINGATAN</div>
+        <div class="warn-msg" id="warnMsg">Anda mendapat peringatan dari pengawas.</div>
+        <button class="btn-main" onclick="dismissWarning()" style="background:var(--dark);margin-top:16px">
+          ✅ Saya Mengerti
+        </button>
       </div>
     </div>
   </div>
-</div>
 
-<!-- ==================== MAPEL PAGE ==================== -->
-<div class="page mapel-page" id="mapelPage" style="display:none">
-  <div class="mapel-card">
-    <div style="text-align:center;margin-bottom:20px">
-      <div style="font-size:42px">📚</div>
-      <h2 id="mapelWelcome">Selamat Datang</h2>
-      <p class="text-muted">Pilih mata pelajaran untuk memulai ujian</p>
-    </div>
-    <div id="mapelButtons"></div>
-    <button class="mapel-btn logout-btn" onclick="doLogout()">
-      <span>🚪 Logout</span>
+  <!-- CHEAT OVERLAY -->
+  <div class="cheat-overlay" id="cheatOverlay">
+    <div class="cheat-icon">⚠️</div>
+    <h2>Pelanggaran Terdeteksi!</h2>
+    <p id="cheatMsg">Tindakan Anda telah dicatat.</p>
+    <div class="cheat-count" id="cheatCount">Pelanggaran ke-1</div>
+    <button class="btn-main" onclick="dismissCheat()" style="background:#fff;color:var(--danger);margin-top:20px">
+      Kembali ke Ujian
     </button>
   </div>
-</div>
 
-<!-- ==================== EXAM PAGE ==================== -->
-<div class="page exam-page" id="examPage" style="display:none">
-  <!-- Header -->
-  <div class="exam-header">
-    <div class="exam-header-left">
-      <button class="nav-toggle" onclick="toggleNavPanel()">☰</button>
-      <span class="header-mapel" id="examMapelBadge">Mapel</span>
-      <span class="header-name" id="examStudentName">Nama</span>
-    </div>
-    <div class="exam-header-right">
-      <div class="violation-badge clean" id="violationBadge">✅ Bersih</div>
-      <div class="timer-box" id="timerBox">00:00:00</div>
+  <!-- BLOCKED OVERLAY -->
+  <div class="blocked-overlay" id="blockedOverlay">
+    <div style="font-size:100px;margin-bottom:16px">🚫</div>
+    <h2>AKUN DIBLOKIR</h2>
+    <p>Anda telah melakukan terlalu banyak pelanggaran.<br>Hubungi pengawas ujian.</p>
+    <button class="btn-main" onclick="recheckBlock()" style="background:#fff;color:#b71c1c;margin-top:20px" id="recheckBlockBtn">
+      🔄 Cek Ulang Status
+    </button>
+    <p id="recheckInfo" style="margin-top:8px;font-size:12px;opacity:.7"></p>
+  </div>
+
+  <!-- KICKED OVERLAY -->
+  <div class="kicked-overlay" id="kickedOverlay">
+    <div style="font-size:80px;margin-bottom:16px">🚪</div>
+    <h2>Anda Dikeluarkan dari Ujian</h2>
+    <p>Pengawas telah mengeluarkan Anda. Hubungi pengawas.</p>
+    <button class="btn-main" onclick="recheckKick()" style="background:#fff;color:var(--dark);margin-top:20px" id="recheckKickBtn">
+      🔄 Cek Ulang Status
+    </button>
+    <p id="recheckKickInfo" style="margin-top:8px;font-size:12px;opacity:.7"></p>
+  </div>
+
+  <!-- ==================== LOGIN PAGE ==================== -->
+  <div class="page login-page" id="loginPage">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="login-logo">📝</div>
+        <h1>CBT SMASSIC 2026</h1>
+        <p>Computer Based Test — SMAN 1 Batu</p>
+      </div>
+      <div class="login-body">
+        <div class="login-alert" id="loginAlert"></div>
+        <div class="form-group">
+          <label>NIS</label>
+          <input type="text" id="inputNIS" placeholder="Masukkan NIS" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <div class="password-wrap">
+            <input type="password" id="inputPassword" placeholder="Masukkan Password" autocomplete="off">
+            <button type="button" class="toggle-pw" onclick="togglePw()">👁</button>
+          </div>
+        </div>
+        <button class="btn-main" id="btnLogin" onclick="doLogin()">
+          🔐 Masuk Ujian
+        </button>
+        <div class="login-footer">
+          ⚠️ Kecurangan terdeteksi otomatis & dilaporkan real-time
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- Body -->
-  <div class="exam-body">
-    <!-- Sidebar Nav -->
-    <div class="soal-sidebar" id="soalSidebar">
-      <div class="sidebar-title">Navigasi Soal</div>
-      <div class="soal-grid" id="soalGrid"></div>
-      <div class="sidebar-stats">
-        <div class="stat-row"><span>Dijawab</span><span class="stat-val text-success" id="stAnswered">0</span></div>
-        <div class="stat-row"><span>Belum</span><span class="stat-val text-danger" id="stUnanswered">0</span></div>
-        <div class="stat-row"><span>Ditandai</span><span class="stat-val text-warning" id="stFlagged">0</span></div>
+  <!-- ==================== MAPEL PAGE ==================== -->
+  <div class="page mapel-page" id="mapelPage" style="display:none">
+    <div class="mapel-card">
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="font-size:42px">📚</div>
+        <h2 id="mapelWelcome">Selamat Datang</h2>
+        <p class="text-muted">Pilih mata pelajaran untuk memulai ujian</p>
       </div>
-      <button class="btn-main submit-sidebar-btn" onclick="openSubmitModal()">
-        📤 Kumpulkan Jawaban
+      <div id="mapelButtons"></div>
+      <button class="mapel-btn logout-btn" onclick="doLogout()">
+        <span>🚪 Logout</span>
       </button>
     </div>
+  </div>
 
-    <!-- Question Area -->
-    <div class="question-area" id="questionArea">
-      <div class="question-card" id="questionCard">
-        <div class="text-center text-muted" style="padding:60px 20px">Memuat soal...</div>
+  <!-- ==================== EXAM PAGE ==================== -->
+  <div class="page exam-page" id="examPage" style="display:none">
+    <!-- Header -->
+    <div class="exam-header">
+      <div class="exam-header-left">
+        <button class="nav-toggle" onclick="toggleNavPanel()">☰</button>
+        <span class="header-mapel" id="examMapelBadge">Mapel</span>
+        <span class="header-name" id="examStudentName">Nama</span>
       </div>
-      <!-- Bottom Nav -->
-      <div class="question-nav">
-        <button class="btn-nav" id="btnPrev" onclick="prevSoal()">← Sebelumnya</button>
-        <button class="btn-flag" id="btnFlag" onclick="toggleFlag()">🚩 Tandai</button>
-        <button class="btn-nav" id="btnNext" onclick="nextSoal()">Selanjutnya →</button>
+      <div class="exam-header-right">
+        <div class="violation-badge clean" id="violationBadge">✅ Bersih</div>
+        <div class="timer-box" id="timerBox">00:00:00</div>
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div class="exam-body">
+      <!-- Sidebar Nav -->
+      <div class="soal-sidebar" id="soalSidebar">
+        <div class="sidebar-title">Navigasi Soal</div>
+        <div class="soal-grid" id="soalGrid"></div>
+        <div class="sidebar-stats">
+          <div class="stat-row"><span>Dijawab</span><span class="stat-val text-success" id="stAnswered">0</span></div>
+          <div class="stat-row"><span>Belum</span><span class="stat-val text-danger" id="stUnanswered">0</span></div>
+          <div class="stat-row"><span>Ditandai</span><span class="stat-val text-warning" id="stFlagged">0</span></div>
+        </div>
+        <button class="btn-main submit-sidebar-btn" onclick="openSubmitModal()">
+          📤 Kumpulkan Jawaban
+        </button>
+      </div>
+
+      <!-- Question Area -->
+      <div class="question-area" id="questionArea">
+        <div class="question-card" id="questionCard">
+          <div class="text-center text-muted" style="padding:60px 20px">Memuat soal...</div>
+        </div>
+        <!-- Bottom Nav -->
+        <div class="question-nav">
+          <button class="btn-nav" id="btnPrev" onclick="prevSoal()">← Sebelumnya</button>
+          <button class="btn-flag" id="btnFlag" onclick="toggleFlag()">🚩 Tandai</button>
+          <button class="btn-nav" id="btnNext" onclick="nextSoal()">Selanjutnya →</button>
+        </div>
       </div>
     </div>
   </div>
-</div>
 
-<!-- ==================== SUBMIT MODAL ==================== -->
-<div class="modal-overlay" id="submitModal">
-  <div class="modal-box">
-    <div style="font-size:48px;margin-bottom:8px">📤</div>
-    <h3>Kumpulkan Jawaban?</h3>
-    <p id="submitSummary" class="text-muted"></p>
-    <div class="modal-actions">
-      <button class="btn-nav" onclick="closeSubmitModal()">Batal</button>
-      <button class="btn-main" onclick="doSubmit(false)">✅ Ya, Kumpulkan</button>
+  <!-- ==================== SUBMIT MODAL ==================== -->
+  <div class="modal-overlay" id="submitModal">
+    <div class="modal-box">
+      <div style="font-size:48px;margin-bottom:8px">📤</div>
+      <h3>Kumpulkan Jawaban?</h3>
+      <p id="submitSummary" class="text-muted"></p>
+      <div class="modal-actions">
+        <button class="btn-nav" onclick="closeSubmitModal()">Batal</button>
+        <button class="btn-main" onclick="doSubmit(false)">✅ Ya, Kumpulkan</button>
+      </div>
     </div>
   </div>
-</div>
 
-<!-- ==================== RESULT PAGE ==================== -->
-<div class="page result-page" id="resultPage" style="display:none">
-  <div class="result-card">
-    <div style="font-size:64px;margin-bottom:12px">🎉</div>
-    <h2>Jawaban Berhasil Dikumpulkan!</h2>
-    <p class="text-muted">Terima kasih telah mengerjakan ujian.<br>Jawaban Anda telah tersimpan dengan aman.</p>
-    <div class="done-badge">✅ Selesai</div>
-    <p style="margin-top:16px;font-size:12px;color:#999">Anda dapat menutup halaman ini.</p>
+  <!-- ==================== RESULT PAGE ==================== -->
+  <div class="page result-page" id="resultPage" style="display:none">
+    <div class="result-card">
+      <div style="font-size:64px;margin-bottom:12px">🎉</div>
+      <h2>Jawaban Berhasil Dikumpulkan!</h2>
+      <p class="text-muted">Terima kasih telah mengerjakan ujian.<br>Jawaban Anda telah tersimpan dengan aman.</p>
+      <div class="done-badge">✅ Selesai</div>
+      <p style="margin-top:16px;font-size:12px;color:#999">Anda dapat menutup halaman ini.</p>
+    </div>
   </div>
-</div>
 
-<!-- IMAGE ZOOM -->
-<div class="img-zoom" id="imgZoom" onclick="this.classList.remove('active')">
-  <img id="zoomImg" src="">
-  <div class="zoom-close" onclick="event.stopPropagation();document.getElementById('imgZoom').classList.remove('active')">✕</div>
-</div>
+  <!-- IMAGE ZOOM - FIXED -->
+  <div class="img-zoom" id="imgZoom">
+    <img id="zoomImg" src="">
+    <div class="zoom-close" id="zoomCloseBtn">✕</div>
+    <div class="zoom-hint">Klik di mana saja untuk menutup</div>
+  </div>
 
-<script src="script.js"></script>
+  <script src="script.js"></script>
+  <script>
+    // Image zoom close handlers - defined after DOM ready
+    document.addEventListener('DOMContentLoaded', function() {
+      const imgZoom = document.getElementById('imgZoom');
+      const zoomCloseBtn = document.getElementById('zoomCloseBtn');
+      const zoomImgEl = document.getElementById('zoomImg');
+
+      // Close on background click
+      imgZoom.addEventListener('click', function(e) {
+        if (e.target === imgZoom || e.target === zoomCloseBtn) {
+          closeZoom();
+        }
+      });
+
+      // Close button
+      zoomCloseBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        closeZoom();
+      });
+
+      // Prevent closing when clicking on the image itself (so user can view)
+      zoomImgEl.addEventListener('click', function(e) {
+        e.stopPropagation();
+      });
+    });
+  </script>
 </body>
 </html>
