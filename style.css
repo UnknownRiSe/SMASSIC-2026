@@ -1,7 +1,7 @@
 /* ============================================================
    CBT SMASSIC 2026 - STUDENT CLIENT STYLES
+   Enhanced: Anti-cheat visual, image zoom fix, cursor sensitivity fix
    ============================================================ */
-
 :root {
   --primary: #1a56db;
   --primary-dark: #1e40af;
@@ -39,6 +39,13 @@ body {
 .text-success { color: var(--success); }
 .text-danger { color: var(--danger); }
 .text-warning { color: var(--warning); }
+
+/* ============ CONTENT BLUR (Anti-Screenshot) ============ */
+.content-blurred {
+  filter: blur(20px) !important;
+  transition: filter 0.1s !important;
+  pointer-events: none;
+}
 
 /* ============ LOADER ============ */
 .loader-overlay {
@@ -135,7 +142,6 @@ body {
   position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
   background: none; border: none; font-size: 18px; cursor: pointer; padding: 8px 12px;
 }
-
 .login-footer { text-align: center; margin-top: 20px; font-size: 11px; color: var(--gray); }
 
 /* ============ MAPEL PAGE ============ */
@@ -155,6 +161,7 @@ body {
   align-items: center; gap: 14px; margin-bottom: 10px; font-size: 15px; font-weight: 600;
 }
 .mapel-btn:hover { border-color: var(--primary); background: var(--primary-light); transform: translateY(-2px); box-shadow: var(--shadow); }
+
 .mapel-btn .mapel-icon {
   width: 44px; height: 44px; border-radius: var(--radius-sm); display: flex;
   align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0;
@@ -175,6 +182,7 @@ body {
 }
 .exam-header-left { display: flex; align-items: center; gap: 10px; }
 .exam-header-right { display: flex; align-items: center; gap: 10px; }
+
 .nav-toggle {
   display: none; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
   color: #fff; padding: 6px 10px; border-radius: 8px; font-size: 16px; cursor: pointer;
@@ -201,7 +209,7 @@ body {
 @keyframes timerPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
 
 /* Exam Body */
-.exam-body { flex: 1; display: flex; overflow: hidden; }
+.exam-body { flex: 1; display: flex; overflow: hidden; transition: filter 0.3s; }
 
 /* Sidebar */
 .soal-sidebar {
@@ -228,7 +236,6 @@ body {
 .sidebar-stats { padding: 12px; background: var(--gray-light); border-radius: var(--radius-sm); margin-bottom: 12px; }
 .stat-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
 .stat-val { font-weight: 800; }
-
 .submit-sidebar-btn { margin-top: auto; font-size: 14px; }
 
 /* Question Area */
@@ -244,6 +251,7 @@ body {
   display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px;
 }
 .question-total { font-size: 13px; color: var(--gray); }
+
 .tipe-badge { font-size: 11px; padding: 4px 12px; border-radius: 6px; font-weight: 700; }
 .tipe-pg { background: #dbeafe; color: #1d4ed8; }
 .tipe-bs { background: #fef3c7; color: #92400e; }
@@ -255,16 +263,39 @@ body {
   white-space: pre-wrap; word-wrap: break-word;
 }
 
-/* Question Image */
+/* Question Image - FIXED */
 .question-img-wrap {
   margin-bottom: 16px; text-align: center; background: var(--gray-light);
   padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border);
 }
-.question-img-wrap img {
+.question-img-wrap img.question-img {
   max-width: 100%; max-height: 350px; border-radius: 8px; cursor: pointer;
   box-shadow: 0 2px 8px rgba(0,0,0,.1);
+  transition: transform 0.2s, box-shadow 0.2s;
 }
-.question-img-wrap .img-hint { font-size: 10px; color: var(--gray); margin-top: 6px; }
+.question-img-wrap img.question-img:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 16px rgba(0,0,0,.2);
+}
+
+/* Image zoom button - FIXED */
+.img-zoom-btn {
+  display: block;
+  margin: 10px auto 0;
+  padding: 8px 20px;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.img-zoom-btn:hover {
+  background: var(--primary-dark);
+  transform: translateY(-1px);
+}
 
 /* PG Options */
 .options-list { display: flex; flex-direction: column; gap: 10px; }
@@ -298,6 +329,7 @@ body {
 .isian-input {
   width: 100%; padding: 14px 16px; border: 2px solid var(--border); border-radius: var(--radius);
   font-size: 15px; outline: none; transition: var(--transition);
+  -webkit-user-select: text; user-select: text; /* Allow text selection in input */
 }
 .isian-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,86,219,.12); }
 
@@ -354,6 +386,7 @@ body {
   border-radius: 50px; font-size: 16px; font-weight: 700;
 }
 @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.1)} }
+
 .blocked-overlay { background: #b71c1c; }
 .kicked-overlay { background: rgba(30,41,59,.98); }
 
@@ -378,18 +411,38 @@ body {
 .warn-title { font-size: 20px; font-weight: 800; margin-bottom: 6px; }
 .warn-msg { font-size: 14px; color: var(--gray); line-height: 1.6; }
 
-/* ============ IMAGE ZOOM ============ */
+/* ============ IMAGE ZOOM - COMPLETELY FIXED ============ */
 .img-zoom {
   position: fixed; inset: 0; background: rgba(0,0,0,.92); z-index: 99997;
-  display: flex; align-items: center; justify-content: center; cursor: zoom-out; padding: 20px;
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column;
+  cursor: zoom-out; padding: 20px;
   opacity: 0; pointer-events: none; transition: opacity .3s;
 }
 .img-zoom.active { opacity: 1; pointer-events: auto; }
-.img-zoom img { max-width: 95%; max-height: 90vh; border-radius: 8px; object-fit: contain; }
+.img-zoom img {
+  max-width: 95%; max-height: 85vh; border-radius: 8px; object-fit: contain;
+  cursor: default;
+  animation: zoomIn 0.3s ease;
+}
+@keyframes zoomIn {
+  from { transform: scale(0.8); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
 .zoom-close {
-  position: absolute; top: 20px; right: 20px; color: #fff; font-size: 24px; cursor: pointer;
-  width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
-  background: rgba(255,255,255,.15); border-radius: 50%;
+  position: absolute; top: 20px; right: 20px; color: #fff; font-size: 28px; cursor: pointer;
+  width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,.2); border-radius: 50%;
+  transition: background 0.2s;
+  z-index: 10;
+}
+.zoom-close:hover {
+  background: rgba(255,255,255,.4);
+}
+.zoom-hint {
+  color: rgba(255,255,255,.5);
+  font-size: 12px;
+  margin-top: 12px;
 }
 
 /* ============ KaTeX ============ */
