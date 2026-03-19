@@ -49,7 +49,6 @@ let lastTouchDist = 0;
 let lastSaveTime = 0;
 
 const MAPEL_LIST = [
-  { nama: 'Biologi', icon: '🧬', color: '#10b981' },
   { nama: 'Matematika', icon: '📐', color: '#3b82f6' },
   { nama: 'IPA', icon: '🔬', color: '#8b5cf6' },
   { nama: 'IPS', icon: '🌍', color: '#f59e0b' }
