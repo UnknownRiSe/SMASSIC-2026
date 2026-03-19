@@ -643,7 +643,7 @@ function filterHasil() {
 // ============ LOAD SOAL (Multi-type + Math) ============
 async function loadSoal() {
   try {
-    const { data, error } = await sb.from('SOAL').select('No, Mapel, Tipe, Soal, Opsi_A, Opsi_B, Opsi_C, Opsi_D, Opsi_E, Kunci, Bobot, Gambar').order('No', { ascending: true });
+    const { data, error } = await sb.from('SOAL').select('No, Mapel, Tipe, Soal, Opsi_A, Opsi_B, Opsi_C, Opsi_D, Opsi_E, Kunci, Bobot, Gambar, Gambar_A, Gambar_B, Gambar_C, Gambar_D, Gambar_E, Sub_soal').order('No', { ascending: true });
     if (error) throw error;
     soalData = data || [];
     renderSoal(soalData);
@@ -655,12 +655,12 @@ async function loadSoal() {
 }
 
 function getTipeLabel(tipe) {
-  var labels = { PG: 'Pilihan Ganda', BS: 'Benar/Salah', IS: 'Isian Singkat' };
+  var labels = { PG: 'Pilihan Ganda', BS: 'Benar/Salah', IS: 'Isian Singkat', BSK: 'BS Kompleks' };
   return labels[tipe] || tipe || 'PG';
 }
 
 function getTipeBadgeClass(tipe) {
-  var classes = { PG: 'bg-primary', BS: 'bg-info', IS: 'bg-success' };
+  var classes = { PG: 'bg-primary', BS: 'bg-info', IS: 'bg-success', BSK: 'bg-warning text-dark' };
   return classes[tipe] || 'bg-secondary';
 }
 
@@ -672,29 +672,35 @@ function renderSoal(list) {
     return;
   }
   tbody.innerHTML = list.map(function(s) {
-    const hasImg = s.Gambar
+    var hasImg = s.Gambar
       ? '<a href="' + esc(s.Gambar) + '" target="_blank" class="btn btn-sm btn-outline-info"><i class="bi bi-image"></i></a>'
       : '-';
-    const tipe = s.Tipe || 'PG';
+    var tipe = s.Tipe || 'PG';
+    var kunciDisplay = '';
+    if (tipe === 'BSK' && s.Sub_soal) {
+      var subs = typeof s.Sub_soal === 'string' ? JSON.parse(s.Sub_soal) : s.Sub_soal;
+      kunciDisplay = subs.map(function(sub) { return sub.label + ':' + (sub.kunci || '?').charAt(0); }).join(' ');
+    } else {
+      kunciDisplay = esc(s.Kunci);
+    }
+    var hasOptImg = (s.Gambar_A || s.Gambar_B || s.Gambar_C || s.Gambar_D || s.Gambar_E) ? ' 🖼' : '';
     return '<tr>' +
       '<td><strong>' + s.No + '</strong></td>' +
       '<td><span class="badge bg-primary-subtle text-primary">' + esc(s.Mapel) + '</span></td>' +
       '<td><span class="badge ' + getTipeBadgeClass(tipe) + '">' + getTipeLabel(tipe) + '</span></td>' +
-      '<td><span class="text-truncate-2 soal-cell">' + esc(s.Soal) + '</span></td>' +
-      '<td><span class="badge bg-success">' + esc(s.Kunci) + '</span></td>' +
+      '<td><span class="text-truncate-2 soal-cell">' + esc(s.Soal) + '</span>' + hasOptImg + '</td>' +
+      '<td><span class="badge bg-success small">' + kunciDisplay + '</span></td>' +
       '<td>' + (s.Bobot || 1) + '</td>' +
       '<td>' + hasImg + '</td>' +
       '<td>' +
-      '<div class="btn-group btn-group-sm">' +
-      '<button class="btn btn-outline-primary btn-sm" onclick="editSoal(' + s.No + ')" title="Edit"><i class="bi bi-pencil"></i></button>' +
-      '<button class="btn btn-outline-danger btn-sm" onclick="deleteSoal(' + s.No + ')" title="Hapus"><i class="bi bi-trash"></i></button>' +
-      '</div>' +
+        '<div class="btn-group btn-group-sm">' +
+        '<button class="btn btn-outline-primary btn-sm" onclick="editSoal(' + s.No + ')" title="Edit"><i class="bi bi-pencil"></i></button>' +
+        '<button class="btn btn-outline-danger btn-sm" onclick="deleteSoal(' + s.No + ')" title="Hapus"><i class="bi bi-trash"></i></button>' +
+        '</div>' +
       '</td>' +
       '</tr>';
   }).join('');
   document.getElementById('soalFooter').textContent = 'Total: ' + list.length + ' soal';
-
-  // Render math in soal cells
   setTimeout(function() {
     document.querySelectorAll('.soal-cell').forEach(function(el) { renderMathIn(el); });
   }, 100);
@@ -712,9 +718,9 @@ function updateMapelFilter() {
 }
 
 function filterSoal() {
-  const m = document.getElementById('filterMapelSoal').value;
-  const t = document.getElementById('filterTipeSoal').value;
-  const filtered = soalData.filter(function(s) {
+  var m = document.getElementById('filterMapelSoal').value;
+  var t = document.getElementById('filterTipeSoal').value;
+  var filtered = soalData.filter(function(s) {
     return (!m || s.Mapel === m) && (!t || (s.Tipe || 'PG') === t);
   });
   renderSoal(filtered);
@@ -722,34 +728,104 @@ function filterSoal() {
 
 // ============ SOAL MODAL (Add/Edit) ============
 function toggleSoalFields() {
-  const tipe = document.getElementById('soalTipe').value;
-  const pgFields = document.getElementById('pgFields');
-  const kunciInput = document.getElementById('soalKunci');
+  var tipe = document.getElementById('soalTipe').value;
+  var pgFields = document.getElementById('pgFields');
+  var bskFields = document.getElementById('bskFields');
+  var kunciInput = document.getElementById('soalKunci');
+  var kunciHint = document.getElementById('kunciHint');
+
+  pgFields.style.display = 'none';
+  bskFields.style.display = 'none';
+  kunciInput.disabled = false;
+  kunciHint.style.display = 'none';
+
   if (tipe === 'PG') {
     pgFields.style.display = '';
     kunciInput.placeholder = 'A / B / C / D / E';
   } else if (tipe === 'BS') {
-    pgFields.style.display = 'none';
     kunciInput.placeholder = 'Benar / Salah';
   } else if (tipe === 'IS') {
-    pgFields.style.display = 'none';
     kunciInput.placeholder = 'Jawaban singkat (teks)';
+  } else if (tipe === 'BSK') {
+    bskFields.style.display = '';
+    kunciInput.disabled = true;
+    kunciInput.placeholder = 'Otomatis dari tabel di bawah';
+    kunciHint.style.display = '';
   }
 }
 
+function addBskRow() {
+  var tbody = document.getElementById('bskTableBody');
+  var rowCount = tbody.querySelectorAll('tr').length;
+  var nextLabel = String.fromCharCode(97 + rowCount); // a, b, c, d...
+  var tr = document.createElement('tr');
+  tr.innerHTML =
+    '<td><input type="text" class="form-control form-control-sm bsk-label" value="' + nextLabel + '"></td>' +
+    '<td><input type="text" class="form-control form-control-sm bsk-text" placeholder="Pernyataan..."></td>' +
+    '<td><select class="form-select form-select-sm bsk-kunci"><option value="Benar">Benar</option><option value="Salah">Salah</option></select></td>' +
+    '<td><input type="number" class="form-control form-control-sm bsk-bobot" value="1" min="1"></td>' +
+    '<td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeBskRow(this)"><i class="bi bi-trash"></i></button></td>';
+  tbody.appendChild(tr);
+}
+
+function removeBskRow(btn) {
+  var tbody = document.getElementById('bskTableBody');
+  if (tbody.querySelectorAll('tr').length <= 1) {
+    showToast('Minimal 1 sub-soal', 'warning');
+    return;
+  }
+  btn.closest('tr').remove();
+}
+
+function getBskData() {
+  var rows = document.querySelectorAll('#bskTableBody tr');
+  var result = [];
+  rows.forEach(function(row) {
+    result.push({
+      label: row.querySelector('.bsk-label').value.trim() || '',
+      text: row.querySelector('.bsk-text').value.trim() || '',
+      kunci: row.querySelector('.bsk-kunci').value,
+      bobot: parseInt(row.querySelector('.bsk-bobot').value) || 1
+    });
+  });
+  return result;
+}
+
+function populateBskTable(subSoal) {
+  var tbody = document.getElementById('bskTableBody');
+  tbody.innerHTML = '';
+  if (!subSoal || !subSoal.length) {
+    addBskRow();
+    return;
+  }
+  subSoal.forEach(function(sub) {
+    var tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td><input type="text" class="form-control form-control-sm bsk-label" value="' + esc(sub.label || '') + '"></td>' +
+      '<td><input type="text" class="form-control form-control-sm bsk-text" value="' + esc(sub.text || '') + '"></td>' +
+      '<td><select class="form-select form-select-sm bsk-kunci">' +
+        '<option value="Benar"' + ((sub.kunci || '').toUpperCase() === 'BENAR' ? ' selected' : '') + '>Benar</option>' +
+        '<option value="Salah"' + ((sub.kunci || '').toUpperCase() === 'SALAH' ? ' selected' : '') + '>Salah</option>' +
+      '</select></td>' +
+      '<td><input type="number" class="form-control form-control-sm bsk-bobot" value="' + (sub.bobot || 1) + '" min="1"></td>' +
+      '<td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeBskRow(this)"><i class="bi bi-trash"></i></button></td>';
+    tbody.appendChild(tr);
+  });
+}
+
 function openSoalModal(editNo) {
-  const isEdit = !!editNo;
+  var isEdit = !!editNo;
   document.getElementById('soalModalTitle').innerHTML = isEdit
     ? '<i class="bi bi-pencil"></i> Edit Soal'
     : '<i class="bi bi-journal-plus"></i> Tambah Soal';
   document.getElementById('soalEditNo').value = isEdit ? editNo : '';
 
   if (isEdit) {
-    const s = soalData.find(function(x) { return x.No === editNo; });
+    var s = soalData.find(function(x) { return x.No === editNo; });
     if (!s) return;
     document.getElementById('soalNo').value = s.No;
     document.getElementById('soalNo').disabled = true;
-    document.getElementById('soalMapel').value = s.Mapel || 'Matematika';
+    document.getElementById('soalMapel').value = s.Mapel || 'Biologi';
     document.getElementById('soalTipe').value = s.Tipe || 'PG';
     document.getElementById('soalText').value = s.Soal || '';
     document.getElementById('soalA').value = s.Opsi_A || '';
@@ -757,9 +833,21 @@ function openSoalModal(editNo) {
     document.getElementById('soalC').value = s.Opsi_C || '';
     document.getElementById('soalD').value = s.Opsi_D || '';
     document.getElementById('soalE').value = s.Opsi_E || '';
+    document.getElementById('soalGambarA').value = s.Gambar_A || '';
+    document.getElementById('soalGambarB').value = s.Gambar_B || '';
+    document.getElementById('soalGambarC').value = s.Gambar_C || '';
+    document.getElementById('soalGambarD').value = s.Gambar_D || '';
+    document.getElementById('soalGambarE').value = s.Gambar_E || '';
     document.getElementById('soalKunci').value = s.Kunci || '';
     document.getElementById('soalBobot').value = s.Bobot || 1;
     document.getElementById('soalGambar').value = s.Gambar || '';
+    // BSK sub-soal
+    if ((s.Tipe || 'PG') === 'BSK' && s.Sub_soal) {
+      var subData = typeof s.Sub_soal === 'string' ? JSON.parse(s.Sub_soal) : s.Sub_soal;
+      populateBskTable(subData);
+    } else {
+      populateBskTable([]);
+    }
   } else {
     document.getElementById('soalNo').value = soalData.length ? Math.max.apply(null, soalData.map(function(x) { return x.No; })) + 1 : 1;
     document.getElementById('soalNo').disabled = false;
@@ -770,18 +858,20 @@ function openSoalModal(editNo) {
     document.getElementById('soalC').value = '';
     document.getElementById('soalD').value = '';
     document.getElementById('soalE').value = '';
+    document.getElementById('soalGambarA').value = '';
+    document.getElementById('soalGambarB').value = '';
+    document.getElementById('soalGambarC').value = '';
+    document.getElementById('soalGambarD').value = '';
+    document.getElementById('soalGambarE').value = '';
     document.getElementById('soalKunci').value = '';
     document.getElementById('soalBobot').value = 1;
     document.getElementById('soalGambar').value = '';
+    populateBskTable([]);
   }
-
   toggleSoalFields();
-
-  // Preview
-  const preview = document.getElementById('soalPreview');
+  var preview = document.getElementById('soalPreview');
   preview.innerHTML = document.getElementById('soalText').value || 'Preview...';
   renderMathIn(preview);
-
   soalModal.show();
 }
 
@@ -790,14 +880,13 @@ function editSoal(no) {
 }
 
 async function saveSoal() {
-  const editNo = document.getElementById('soalEditNo').value;
-  const isEdit = !!editNo;
-  const no = parseInt(document.getElementById('soalNo').value);
-  const tipe = document.getElementById('soalTipe').value;
-
+  var editNo = document.getElementById('soalEditNo').value;
+  var isEdit = !!editNo;
+  var no = parseInt(document.getElementById('soalNo').value);
+  var tipe = document.getElementById('soalTipe').value;
   if (!no) { showToast('No soal wajib diisi', 'error'); return; }
 
-  const payload = {
+  var payload = {
     No: no,
     Mapel: document.getElementById('soalMapel').value,
     Tipe: tipe,
@@ -807,18 +896,24 @@ async function saveSoal() {
     Opsi_C: tipe === 'PG' ? document.getElementById('soalC').value : null,
     Opsi_D: tipe === 'PG' ? document.getElementById('soalD').value : null,
     Opsi_E: tipe === 'PG' ? document.getElementById('soalE').value : null,
-    Kunci: document.getElementById('soalKunci').value,
+    Gambar_A: tipe === 'PG' ? (document.getElementById('soalGambarA').value || null) : null,
+    Gambar_B: tipe === 'PG' ? (document.getElementById('soalGambarB').value || null) : null,
+    Gambar_C: tipe === 'PG' ? (document.getElementById('soalGambarC').value || null) : null,
+    Gambar_D: tipe === 'PG' ? (document.getElementById('soalGambarD').value || null) : null,
+    Gambar_E: tipe === 'PG' ? (document.getElementById('soalGambarE').value || null) : null,
+    Kunci: tipe === 'BSK' ? null : document.getElementById('soalKunci').value,
     Bobot: parseInt(document.getElementById('soalBobot').value) || 1,
-    Gambar: document.getElementById('soalGambar').value || null
+    Gambar: document.getElementById('soalGambar').value || null,
+    Sub_soal: tipe === 'BSK' ? getBskData() : null
   };
 
   try {
     if (isEdit) {
-      const { error } = await sb.from('SOAL').update(payload).eq('No', parseInt(editNo));
+      var { error } = await sb.from('SOAL').update(payload).eq('No', parseInt(editNo));
       if (error) throw error;
       showToast('Soal diupdate!', 'success');
     } else {
-      const { error } = await sb.from('SOAL').insert(payload);
+      var { error } = await sb.from('SOAL').insert(payload);
       if (error) throw error;
       showToast('Soal ditambahkan!', 'success');
     }
@@ -978,11 +1073,13 @@ function exportHasilExcel() {
 }
 
 function exportSoalExcel() {
-  const data = soalData.map(function(s) {
+  var data = soalData.map(function(s) {
     return {
       No: s.No, Mapel: s.Mapel, Tipe: s.Tipe || 'PG', Soal: s.Soal,
       Opsi_A: s.Opsi_A, Opsi_B: s.Opsi_B, Opsi_C: s.Opsi_C, Opsi_D: s.Opsi_D, Opsi_E: s.Opsi_E,
-      Kunci: s.Kunci, Bobot: s.Bobot, Gambar: s.Gambar
+      Gambar_A: s.Gambar_A, Gambar_B: s.Gambar_B, Gambar_C: s.Gambar_C, Gambar_D: s.Gambar_D, Gambar_E: s.Gambar_E,
+      Kunci: s.Kunci, Bobot: s.Bobot, Gambar: s.Gambar,
+      Sub_soal: s.Sub_soal ? JSON.stringify(s.Sub_soal) : ''
     };
   });
   exportToExcel(data, 'bank_soal_cbt.xlsx', 'Soal');
