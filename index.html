@@ -71,7 +71,7 @@
   <div class="page login-page" id="loginPage">
     <div class="login-card">
       <div class="login-header">
-        <div class="login-logo">📝</div>
+        <div class="login-logo">🔐</div>
         <h1>CBT SMASSIC 2026</h1>
         <p>Computer Based Test — SMAN 1 Batu</p>
       </div>
@@ -89,7 +89,7 @@
           </div>
         </div>
         <button class="btn-main" id="btnLogin" onclick="doLogin()">
-          🔐 Masuk Ujian
+          🔒 Masuk Ujian
         </button>
         <div class="login-footer">
           ⚠️ Kecurangan terdeteksi otomatis & dilaporkan real-time
@@ -183,39 +183,21 @@
     </div>
   </div>
 
-  <!-- IMAGE ZOOM - FIXED -->
-  <div class="img-zoom" id="imgZoom">
-    <img id="zoomImg" src="">
-    <div class="zoom-close" id="zoomCloseBtn">✕</div>
-    <div class="zoom-hint">Klik di mana saja untuk menutup</div>
+  <!-- IMAGE ZOOM WITH PINCH/SCROLL ZOOM -->
+  <div class="img-zoom-overlay" id="imgZoomOverlay">
+    <div class="zoom-toolbar">
+      <button class="zoom-tb-btn" id="zoomOutBtn" title="Zoom Out">➖</button>
+      <span class="zoom-level" id="zoomLevelDisplay">100%</span>
+      <button class="zoom-tb-btn" id="zoomInBtn" title="Zoom In">➕</button>
+      <button class="zoom-tb-btn" id="zoomResetBtn" title="Reset">↺</button>
+      <button class="zoom-tb-btn zoom-close-btn" id="zoomCloseBtn" title="Tutup">✕</button>
+    </div>
+    <div class="zoom-container" id="zoomContainer">
+      <img id="zoomImg" src="" alt="Zoom">
+    </div>
+    <div class="zoom-hint">Scroll/pinch untuk zoom • Drag untuk geser • Klik luar untuk tutup</div>
   </div>
 
   <script src="script.js"></script>
-  <script>
-    // Image zoom close handlers - defined after DOM ready
-    document.addEventListener('DOMContentLoaded', function() {
-      const imgZoom = document.getElementById('imgZoom');
-      const zoomCloseBtn = document.getElementById('zoomCloseBtn');
-      const zoomImgEl = document.getElementById('zoomImg');
-
-      // Close on background click
-      imgZoom.addEventListener('click', function(e) {
-        if (e.target === imgZoom || e.target === zoomCloseBtn) {
-          closeZoom();
-        }
-      });
-
-      // Close button
-      zoomCloseBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        closeZoom();
-      });
-
-      // Prevent closing when clicking on the image itself (so user can view)
-      zoomImgEl.addEventListener('click', function(e) {
-        e.stopPropagation();
-      });
-    });
-  </script>
 </body>
 </html>
