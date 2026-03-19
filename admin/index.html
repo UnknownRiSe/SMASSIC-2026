@@ -451,6 +451,7 @@
                 <option value="PG">Pilihan Ganda</option>
                 <option value="BS">Benar/Salah</option>
                 <option value="IS">Isian Singkat</option>
+                <option value="BSK">Benar/Salah Kompleks</option>
               </select>
               <button class="btn btn-sm btn-primary" onclick="openSoalModal()"><i class="bi bi-plus-lg"></i> Tambah Soal</button>
               <button class="btn btn-sm btn-success" onclick="exportSoalExcel()"><i class="bi bi-file-earmark-excel"></i> Export</button>
@@ -475,9 +476,9 @@
   </main>
 </div>
 
-<!-- ===== SOAL MODAL (Add/Edit) ===== -->
+<!-- ===== SOAL MODAL (Add/Edit) - UPGRADED ===== -->
 <div class="modal fade" id="soalModal" tabindex="-1" data-bs-backdrop="static">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title fw-bold" id="soalModalTitle"><i class="bi bi-journal-plus"></i> Tambah Soal</h5>
@@ -486,55 +487,121 @@
       <div class="modal-body">
         <input type="hidden" id="soalEditNo">
         <div class="row g-3">
-          <div class="col-md-4">
+          <div class="col-md-3">
             <label class="form-label small fw-semibold">No Soal</label>
             <input type="number" class="form-control form-control-sm" id="soalNo" min="1">
           </div>
-          <div class="col-md-4">
+          <div class="col-md-3">
             <label class="form-label small fw-semibold">Mapel</label>
             <select class="form-select form-select-sm" id="soalMapel">
+              <option value="Biologi">Biologi</option>
               <option value="Matematika">Matematika</option>
               <option value="IPA">IPA</option>
               <option value="IPS">IPS</option>
             </select>
           </div>
-          <div class="col-md-4">
+          <div class="col-md-3">
             <label class="form-label small fw-semibold">Tipe Soal</label>
             <select class="form-select form-select-sm" id="soalTipe" onchange="toggleSoalFields()">
               <option value="PG">Pilihan Ganda (A-E)</option>
               <option value="BS">Benar / Salah</option>
               <option value="IS">Isian Singkat</option>
+              <option value="BSK">Benar/Salah Kompleks</option>
             </select>
           </div>
+          <div class="col-md-3">
+            <label class="form-label small fw-semibold">Bobot</label>
+            <input type="number" class="form-control form-control-sm" id="soalBobot" value="1" min="1">
+          </div>
+
           <div class="col-12">
-            <label class="form-label small fw-semibold">Soal <small class="text-muted">(Gunakan $...$ untuk rumus LaTeX inline, $$...$$ untuk display)</small></label>
-            <textarea class="form-control" id="soalText" rows="4" placeholder="Contoh: Tentukan nilai $x$ jika $2x + 3 = 7$"></textarea>
+            <label class="form-label small fw-semibold">Soal / Konteks <small class="text-muted">($...$ untuk LaTeX)</small></label>
+            <textarea class="form-control" id="soalText" rows="4" placeholder="Teks soal utama..."></textarea>
             <div class="mt-2 p-2 border rounded bg-light small" id="soalPreview">Preview muncul di sini...</div>
           </div>
+
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold">URL Gambar Soal (opsional)</label>
+            <input type="text" class="form-control form-control-sm" id="soalGambar" placeholder="https://...">
+            <div id="soalGambarPreview" class="mt-1"></div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold">Kunci Jawaban</label>
+            <input type="text" class="form-control form-control-sm" id="soalKunci" placeholder="A/B/C/D/E atau Benar/Salah">
+            <small class="text-muted" id="kunciHint">Untuk BSK, kunci diisi per sub-soal di bawah</small>
+          </div>
+
           <!-- PG Options -->
           <div id="pgFields">
-            <div class="row g-2">
-              <div class="col-md-6"><label class="form-label small fw-semibold">Opsi A</label><input type="text" class="form-control form-control-sm" id="soalA" placeholder="Opsi A (bisa pakai $rumus$)"></div>
-              <div class="col-md-6"><label class="form-label small fw-semibold">Opsi B</label><input type="text" class="form-control form-control-sm" id="soalB" placeholder="Opsi B"></div>
-              <div class="col-md-6"><label class="form-label small fw-semibold">Opsi C</label><input type="text" class="form-control form-control-sm" id="soalC" placeholder="Opsi C"></div>
-              <div class="col-md-6"><label class="form-label small fw-semibold">Opsi D</label><input type="text" class="form-control form-control-sm" id="soalD" placeholder="Opsi D"></div>
-              <div class="col-md-6"><label class="form-label small fw-semibold">Opsi E</label><input type="text" class="form-control form-control-sm" id="soalE" placeholder="Opsi E (kosongkan jika 4 opsi)"></div>
+            <div class="card border mb-2">
+              <div class="card-header py-2 bg-light"><small class="fw-bold">Opsi Pilihan Ganda</small></div>
+              <div class="card-body py-2">
+                <div class="row g-2">
+                  <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Opsi A</label>
+                    <input type="text" class="form-control form-control-sm" id="soalA" placeholder="Teks opsi A">
+                    <input type="text" class="form-control form-control-sm mt-1" id="soalGambarA" placeholder="URL Gambar A (opsional)">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Opsi B</label>
+                    <input type="text" class="form-control form-control-sm" id="soalB" placeholder="Teks opsi B">
+                    <input type="text" class="form-control form-control-sm mt-1" id="soalGambarB" placeholder="URL Gambar B (opsional)">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Opsi C</label>
+                    <input type="text" class="form-control form-control-sm" id="soalC" placeholder="Teks opsi C">
+                    <input type="text" class="form-control form-control-sm mt-1" id="soalGambarC" placeholder="URL Gambar C (opsional)">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Opsi D</label>
+                    <input type="text" class="form-control form-control-sm" id="soalD" placeholder="Teks opsi D">
+                    <input type="text" class="form-control form-control-sm mt-1" id="soalGambarD" placeholder="URL Gambar D (opsional)">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Opsi E <small class="text-muted">(kosongkan jika 4 opsi)</small></label>
+                    <input type="text" class="form-control form-control-sm" id="soalE" placeholder="Teks opsi E">
+                    <input type="text" class="form-control form-control-sm mt-1" id="soalGambarE" placeholder="URL Gambar E (opsional)">
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="row g-2">
-            <div class="col-md-4">
-              <label class="form-label small fw-semibold">Kunci Jawaban</label>
-              <input type="text" class="form-control form-control-sm" id="soalKunci" placeholder="A/B/C/D/E atau Benar/Salah atau teks">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label small fw-semibold">Bobot</label>
-              <input type="number" class="form-control form-control-sm" id="soalBobot" value="1" min="1">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label small fw-semibold">URL Gambar (opsional)</label>
-              <input type="text" class="form-control form-control-sm" id="soalGambar" placeholder="https://...">
+
+          <!-- BSK Fields -->
+          <div id="bskFields" style="display:none">
+            <div class="card border">
+              <div class="card-header py-2 bg-light d-flex justify-content-between align-items-center">
+                <small class="fw-bold"><i class="bi bi-table"></i> Sub-Soal Benar/Salah</small>
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="addBskRow()"><i class="bi bi-plus"></i> Tambah Baris</button>
+              </div>
+              <div class="card-body py-2">
+                <div class="table-responsive">
+                  <table class="table table-sm table-bordered mb-0" id="bskTable">
+                    <thead class="table-light">
+                      <tr>
+                        <th style="width:50px">Label</th>
+                        <th>Pernyataan</th>
+                        <th style="width:100px">Kunci</th>
+                        <th style="width:70px">Bobot</th>
+                        <th style="width:50px">Hapus</th>
+                      </tr>
+                    </thead>
+                    <tbody id="bskTableBody">
+                      <tr>
+                        <td><input type="text" class="form-control form-control-sm bsk-label" value="a"></td>
+                        <td><input type="text" class="form-control form-control-sm bsk-text" placeholder="Pernyataan..."></td>
+                        <td><select class="form-select form-select-sm bsk-kunci"><option value="Benar">Benar</option><option value="Salah">Salah</option></select></td>
+                        <td><input type="number" class="form-control form-control-sm bsk-bobot" value="1" min="1"></td>
+                        <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeBskRow(this)"><i class="bi bi-trash"></i></button></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <small class="text-muted mt-1 d-block">Setiap baris adalah sub-pernyataan yang dijawab Benar/Salah oleh siswa</small>
+              </div>
             </div>
           </div>
+
         </div>
       </div>
       <div class="modal-footer">
